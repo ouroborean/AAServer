@@ -6,7 +6,7 @@ import os
 from os import listdir
 from os.path import isfile, join
 
-def handle_login_attempt(data: list[bytes], client):
+def handle_login_attempt(data: list, client):
     print("Received login attempt!")
     buffer = ByteBuffer()
     buffer.write_bytes(data)
@@ -64,7 +64,7 @@ def send_login_confirmation(client, wins, losses, avatar=None):
     client.connection.write(buffer.get_byte_array())
     buffer.clear()
 
-def handle_avatar_update(data:list[bytes], client):
+def handle_avatar_update(data:list, client):
     buffer = ByteBuffer()
     buffer.write_bytes(data)
     buffer.read_int()
@@ -73,7 +73,7 @@ def handle_avatar_update(data:list[bytes], client):
     with open(f"accounts/avatars/{client.username}.dat", "wb") as f:
         f.write(ava_code)
 
-def handle_registration(data: list[bytes], client):
+def handle_registration(data: list, client):
 
     buffer = ByteBuffer()
     buffer.write_bytes(data)
@@ -102,7 +102,7 @@ def handle_registration(data: list[bytes], client):
                     f.writelines("0\n")
                 send_registration(client, "Registration complete!")
 
-def handle_player_update(data: list[bytes], client):
+def handle_player_update(data: list, client):
     buffer = ByteBuffer()
     buffer.write_bytes(data)
     buffer.read_int()
@@ -126,7 +126,7 @@ def send_registration(client, message):
     client.connection.write(buffer.get_byte_array())
     buffer.clear()
 
-def handle_start_package(data: list[bytes], client):
+def handle_start_package(data: list, client):
     print("Received a start package!")
     buffer = ByteBuffer()
     buffer.write_bytes(data)
@@ -143,7 +143,7 @@ def handle_start_package(data: list[bytes], client):
         send_opponent_package(manager.matches[mID].player1, manager.matches[mID].player2_start_package, True)
         send_opponent_package(manager.matches[mID].player2, manager.matches[mID].player1_start_package, False)
 
-def handle_surrender(data: list[bytes], client):
+def handle_surrender(data: list, client):
     for match in manager.matches.values():
             if client == match.player1:
                 send_surrender_notification(match.player2)
@@ -168,7 +168,7 @@ def send_opponent_package(client, package, first_turn):
     buffer.write_bytes(package)
     client.connection.write(buffer.get_byte_array())
 
-def handle_match_communication(data: list[bytes], client):
+def handle_match_communication(data: list, client):
     
     buffer = ByteBuffer()
     buffer.write_bytes(data)
@@ -182,10 +182,10 @@ def handle_match_communication(data: list[bytes], client):
 
     buffer.clear()
 
-def handle_search_cancellation(data: list[bytes], client):
+def handle_search_cancellation(data: list, client):
     manager.waiting_matches.clear()
 
-packets: dict[int, Callable] = {
+packets: dict = {
     0: handle_start_package,
     1: handle_match_communication,
     2: handle_login_attempt,

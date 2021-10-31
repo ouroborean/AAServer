@@ -47,7 +47,7 @@ async def handle_echo(reader, writer):
 
 
 async def main():
-    server = await asyncio.start_server(handle_echo, host="34.125.230.69", port=5692)
+    server = await asyncio.start_server(handle_echo, host="10.182.0.2", port=5692)
     async with server:
         await server.serve_forever()
 

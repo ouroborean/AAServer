@@ -1,12 +1,13 @@
 class ByteBuffer():
 
-    buff: list[bytes] = []
-    read_pos: int = 0
-    buff_updated = False
+    buff: list
+    read_pos: int
+    
 
     def __init__(self):
         self.buff = []
         self.read_pos = 0
+        self.buff_updated = False
 
     def get_read_pos(self) -> int:
         return self.read_pos
@@ -23,7 +24,7 @@ class ByteBuffer():
     def clear(self):
         self.buff = []
     
-    def write_bytes(self, input: list[bytes]):
+    def write_bytes(self, input: list):
         self.buff.extend(input)
         self.buff_updated = True
 
@@ -36,7 +37,7 @@ class ByteBuffer():
         self.buff.extend(input.encode('utf-8'))
         self.buff_updated = True
     
-    def read_bytes(self, length: int, peek: bool = True) -> list[bytes]:
+    def read_bytes(self, length: int, peek: bool = True) -> list:
         if self.count() > self.read_pos:
             if self.buff_updated:
                 self.buff_updated = False

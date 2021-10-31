@@ -2,8 +2,8 @@ from server.match import Match
 
 class MatchManager():
 
-    matches: dict[str, Match] = {}
-    waiting_matches: list[Match] = []
+    matches: dict = {}
+    waiting_matches: list = []
 
     def __init__(self):
         pass

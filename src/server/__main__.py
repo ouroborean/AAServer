@@ -3,43 +3,48 @@ from server.byte_buffer import ByteBuffer
 from server import data_handler
 from server.client import Client, client_db
 from server.match_manager import manager
+from server.player_status import PlayerStatus
 
 async def handle_echo(reader, writer):
+    print("Client connected!")
     client = Client(writer, writer.get_extra_info('peername')[0], writer.get_extra_info('peername')[1])
     buffer = ByteBuffer()
     while True:
-        data = await reader.read(120000)
+        try:
+            data = await reader.readuntil(b'\x1f\x1f\x1f')
+        except asyncio.exceptions.IncompleteReadError:
+            break
         if not data:
             break
-        buffer.write_bytes(data)
+        buffer.write_bytes(data[:-3])
+        print(f"Package received of length {len(data)}")
         packet_id = buffer.read_int(False)
         data_handler.packets[packet_id](buffer.buff, client)
         buffer.clear()
     if client.username != "":
-        client_db[client.username] = False
         print(f"Player {client.username} disconnected from server.")
-
-        for match in manager.matches.values():
-            if client == match.player1:
-                data_handler.send_surrender_notification(match.player2)
-                with open(f"accounts/{client.username}.dat") as f:
-                    lines = f.readlines()
-                    losses = int(lines[2])
-                    lines[2] = str(losses + 1) + "\n"
-    
-                with open(f"accounts/{client.username}.dat", "w") as f:
-                    for line in lines:
-                        f.writelines(line)
-            elif client == match.player2:
-                data_handler.send_surrender_notification(match.player1)
-                with open(f"accounts/{client.username}.dat") as f:
-                    lines = f.readlines()
-                    losses = int(lines[2])
-                    lines[2] = str(losses + 1) + "\n"
-    
-                with open(f"accounts/{client.username}.dat", "w") as f:
-                    for line in lines:
-                        f.writelines(line)
+        if client.match:
+            if client == client.match.player1:
+                if client_db[client.match.player2.username] == PlayerStatus.DISCONNECTED:
+                    data_handler.add_a_loss(client)
+                    data_handler.add_a_loss(client.match.player2)
+                    client_db[client.match.player2.username] = PlayerStatus.OFFLINE
+                    client_db[client.username] = PlayerStatus.OFFLINE
+                    manager.matches.pop(client.match.get_match_id())
+                    
+                else:
+                    client_db[client.username] = PlayerStatus.DISCONNECTED
+            elif client == client.match.player2:
+                if client_db[client.match.player1.username] == PlayerStatus.DISCONNECTED:
+                    data_handler.add_a_loss(client)
+                    data_handler.add_a_loss(client.match.player1)
+                    client_db[client.match.player1.username] = PlayerStatus.OFFLINE
+                    client_db[client.username] = PlayerStatus.OFFLINE
+                    manager.matches.pop(client.match.get_match_id())
+                else:
+                    client_db[client.username] = PlayerStatus.DISCONNECTED
+        else:
+            client_db.pop(client.username)
         for match in manager.waiting_matches:
             if match.player1 == client:
                 manager.waiting_matches.clear()
@@ -47,7 +52,7 @@ async def handle_echo(reader, writer):
 
 
 async def main():
-    server = await asyncio.start_server(handle_echo, host="10.182.0.2", port=5692)
+    server = await asyncio.start_server(handle_echo, host="127.0.0.1", port=5692)
     async with server:
         await server.serve_forever()
 

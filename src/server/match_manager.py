@@ -10,8 +10,8 @@ class MatchManager():
 
     def create_open_match(self, client, start_package):
         self.waiting_matches.append(Match(client, start_package))
-    
         
+    
 
     def close_match(self, client, start_package) -> str:
         match = self.waiting_matches[0]

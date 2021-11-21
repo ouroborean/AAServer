@@ -19,8 +19,6 @@ def handle_login_attempt(data: list, client):
     packet_id = buffer.read_int()
     username = buffer.read_string()
     password = buffer.read_string()
-    username = username.replace("\0", "")
-    password = password.replace("\0", "")
     password = bytes(password, 'utf-16')
     hashpass = hashlib.scrypt(password, salt=SALT, n=16384, r=8, p=1)   
     buffer.clear()
@@ -162,9 +160,6 @@ def handle_registration(data: list, client):
     packet_id = buffer.read_int()
     username = buffer.read_string()
     password = buffer.read_string()
-
-    username = username.replace("\0", "")
-    password = password.replace("\0", "")
     password = bytes(password, 'utf-16')
     hashpass = hashlib.scrypt(password, salt=SALT, n=16384, r=8, p=1)
     buffer.clear()
@@ -191,7 +186,7 @@ def process_match_stats(data: list, client):
     buffer = ByteBuffer()
     buffer.write_bytes(data)
     buffer.read_int()
-    names = [buffer.read_string().replace("\0", "") for i in range(3)]
+    names = [buffer.read_string() for i in range(3)]
     won = buffer.read_int()
     for name in names:
         path = f"stats/{name}.dat"

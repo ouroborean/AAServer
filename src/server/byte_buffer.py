@@ -63,8 +63,7 @@ class ByteBuffer():
         length = self.read_int(True)
         if self.buff_updated:
             self.buff_updated = False
-        output = ""
-        output = output.join([x.to_bytes(4, 'big').decode('utf-8') for x in self.buff[self.read_pos:self.read_pos + length]])
+        output = str(bytes(self.buff[self.read_pos:self.read_pos + length]), encoding='utf-8')
         if peek and self.count() > self.read_pos:
             if len(output) > 0:
                 self.read_pos += length

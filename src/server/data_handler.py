@@ -1,77 +1,38 @@
+from server import match
 from server.byte_buffer import ByteBuffer
 from server.match_manager import manager
 from server.player_status import PlayerStatus
+from server.managers import accounts
+from server.managers.accounts import AccountManager
 from typing import Callable
 from server.client import client_db
+from pathlib import Path
 import dill as pickle
 import os
 import random
 import hashlib
 from os import listdir
 from os.path import isfile, join
+
+from server.handlers import login, match_communication, register, start_package
+
 SALT = b'gawr gura for president'
 
-def handle_login_attempt(data: list, client):
-    print("Received login attempt!")
-    buffer = ByteBuffer()
-    buffer.write_bytes(data)
-    buffer.write_bytes(data)
-    packet_id = buffer.read_int()
-    username = buffer.read_string()
-    password = buffer.read_string()
-    password = bytes(password, 'utf-16')
-    hashpass = hashlib.scrypt(password, salt=SALT, n=16384, r=8, p=1)   
-    buffer.clear()
+account_manager = AccountManager(Path(r"C:\Users\poofl\Documents\Code\AAServer"))
 
-    if not os.path.exists("accounts"):
-        os.makedirs("accounts")
-        os.makedirs("accounts/avatars")
-    else:
-        path = f"accounts/{username}.dat"
-        if os.path.exists(path):
-            if username in client_db.keys() and (client_db[username] == PlayerStatus.ONLINE or client_db[username] == PlayerStatus.DISCONNECTED):
-                if client_db[username] == PlayerStatus.ONLINE:
-                    send_login_failure(client, "Account currently logged in.")
-                elif client_db[username] == PlayerStatus.DISCONNECTED:
-                    for match in manager.matches.values():
-                        if match.match_id[0] == username or match.match_id[1] == username:
-                            with open(f"accounts/{username}pass.dat", "rb") as f:
-                                passhash = f.readline()
-                            with open(path) as f:
-                                lines = f.readlines()
-                            
-                                if passhash == hashpass:
-                                    client.username = username
-                                    client_db[client.username] = PlayerStatus.ONLINE
-                                    ava_code = None
-                                    if os.path.exists(f"accounts/avatars/{username}.dat"):
-                                        with open(f"accounts/avatars/{username}.dat", "rb") as ava_f:
-                                            ava_code = ava_f.read()
-                                    match.rejoin_match(client)
-                                    print("Performed reconnect login!")
-                                    send_login_confirmation(client, int(lines[0].strip()), int(lines[1].strip()), ava_code)
-                                    send_reconnection(client)
-                                else:
-                                    send_login_failure(client, "Incorrect password.")
-                            
-                            
-            else:
-                with open(f"accounts/{username}pass.dat", "rb") as f:
-                    passhash = f.readline()
-                with open(path) as f:
-                    lines = f.readlines()
-                    if passhash == hashpass:
-                        client.username = username
-                        client_db[client.username] = PlayerStatus.ONLINE
-                        ava_code = None
-                        if os.path.exists(f"accounts/avatars/{username}.dat"):
-                            with open(f"accounts/avatars/{username}.dat", "rb") as ava_f:
-                                ava_code = ava_f.read()
-                        send_login_confirmation(client, int(lines[0].strip()), int(lines[1].strip()), ava_code)
-                    else:
-                        send_login_failure(client, "Incorrect password.")
-        else:
-            send_login_failure(client, "No account exists with that username.")
+def handle_login_attempt(data: list, client):
+    # Attempt login and retrieve message to send back to client, either:
+    #   A: A successful login package, with player and account information
+    #   B: A failure message
+    reconnecting, login_result = login.handle_login(bytes(data), client, account_manager)
+
+    # Send message back to client
+
+    client.connection.write(login_result)
+
+    # Handle reconnection if the client is shown as having disconnected from a game
+    if reconnecting:
+        client.connection.write(login.handle_reconnection(client))
 
 def send_login_failure(client, message):
     buffer = ByteBuffer()
@@ -154,33 +115,12 @@ def handle_avatar_update(data:list, client):
         f.write(ava_code)
 
 def handle_registration(data: list, client):
+    # Attempt registration and retrieve a response string to send back to the client
+    registration_result = register.handle_register(bytes(data), client, account_manager)
 
-    buffer = ByteBuffer()
-    buffer.write_bytes(data)
-    packet_id = buffer.read_int()
-    username = buffer.read_string()
-    password = buffer.read_string()
-    password = bytes(password, 'utf-16')
-    hashpass = hashlib.scrypt(password, salt=SALT, n=16384, r=8, p=1)
-    buffer.clear()
+    # Send response string to client
+    client.connection.write(registration_result)
 
-    if not username.isalnum():
-        send_registration(client, "Please use alphanumeric characters only.")
-    else:
-        if not os.path.exists("accounts"):
-            os.makedirs("accounts")
-        else:
-            path = f"accounts/{username}pass.dat"
-            if os.path.exists(path):
-                send_registration(client, "Username taken. Please choose another username.")
-            else:
-                with open(path, "wb") as f:
-                    f.write(hashpass)
-                path = f"accounts/{username}.dat"
-                with open(path, "w") as f:
-                    f.writelines("0\n")
-                    f.writelines("0\n")
-                send_registration(client, "Registration complete!")
 
 def process_match_stats(data: list, client):
     buffer = ByteBuffer()
@@ -228,24 +168,22 @@ def handle_player_update(data: list, client):
     wins = buffer.read_int()
     losses = buffer.read_int()
 
-    with open(f"accounts/{client.username}.dat") as f:
-        lines = f.readlines()
-        lines[0] = str(wins) + "\n"
-        lines[1] = str(losses) + "\n"
+    data = f"{wins}/{losses}"
     
-    with open(f"accounts/{client.username}.dat", "w") as f:
-        for line in lines:
-            f.writelines(line)
+    with open(f"accounts/{client.username}data.dat", "w") as f:
+        f.write(data)
 
 def add_a_loss(client):
-    with open(f"accounts/{client.username}.dat") as f:
-        lines = f.readlines()
-        losses = int(lines[1].strip())
-        lines[1] = str(losses + 1) + "\n"
+    with open(f"accounts/{client.username}data.dat") as f:
+        data = f.read().strip()
+        player_data = data.split("/")
+        wins = int(player_data[0])
+        losses = int(player_data[1])
+        losses += 1
+        data = f"{wins}/{losses}"
     
-    with open(f"accounts/{client.username}.dat", "w") as f:
-        for line in lines:
-            f.writelines(line)
+    with open(f"accounts/{client.username}data.dat", "w") as f:
+        f.write(data)
 
 def send_registration(client, message):
     buffer = ByteBuffer()
@@ -256,31 +194,19 @@ def send_registration(client, message):
     buffer.clear()
 
 def handle_start_package(data: list, client):
-    print("Received a start package!")
-    buffer = ByteBuffer()
-    buffer.write_bytes(data)
-    packet_id = buffer.read_int()
-    start_package = buffer.buff[buffer.read_pos:]
-    buffer.clear()
-
-    if len(manager.waiting_matches) == 0:
-        print("Created an open match!")
-        manager.create_open_match(client, start_package)
-    else:
-        print("Closed a match!")
-        mID = manager.close_match(client, start_package)
-
-        
-
-        send_opponent_package(manager.matches[mID].player1, manager.matches[mID].player1_energy, manager.matches[mID].player2_start_package, manager.matches[mID].player1_first)
-        send_opponent_package(manager.matches[mID].player2, manager.matches[mID].player2_energy, manager.matches[mID].player1_start_package, not manager.matches[mID].player1_first)
+    
+    if start_package_response := start_package.handle_start_package(bytes(data), client):
+        mID = start_package_response[0]
+        p1_message = start_package_response[1]
+        p2_message = start_package_response[2]
+        manager.matches[mID].player1.connection.write(p1_message)
+        manager.matches[mID].player2.connection.write(p2_message)
 
 def handle_surrender(data: list, client):
-    for match in manager.matches.values():
-            if client == match.player1:
-                send_surrender_notification(match.player2)
-            elif client == match.player2:
-                send_surrender_notification(match.player1)
+        if client == client.match.player1:
+            send_surrender_notification(client.match.player2)
+        elif client == client.match.player2:
+            send_surrender_notification(client.match.player1)
 
 def send_surrender_notification(client):
     buffer = ByteBuffer()
@@ -306,63 +232,15 @@ def send_opponent_package(client, energy, package, first_turn):
 
 def handle_match_communication(data: list, client):
     
-    buffer = ByteBuffer()
-    buffer.write_bytes(data)
-    print(f"Transferring match communication of length {len(data)}")
-    buffer.read_int()
-    energy_pool = []
-    for i in range(4):
-        energy_pool.append(buffer.read_int())
-    energy_cont = []
-    for i in range(5):
-        energy_cont.append(buffer.read_int())
-    match_data = bytes(buffer.buff[buffer.read_pos:])
-    client.match.player1_turn = not client.match.player1_turn
-    if client.match.player1_turn:
-        print(f"It's {client.match.player1.username}'s turn!")
-    else:
-        print(f"It's {client.match.player2.username}'s turn!")
-    buffer.clear()
-    buffer.write_byte(b'\x1f\x1f\x1f')
+    message = match_communication.handle_match_communication(bytes(data), client)
 
     if client == client.match.player1:
-        client.match.player1_energy = energy_pool
-        print("Sending communication to player 2!")
-        client.match.first_turn -= 1
-        if client.match.first_turn < 0:
-            client.match.first_turn = 0
-        if not client.match.first_turn:
-            client.match.player2_energy = generate_energy(energy_cont, client.match.player2_energy)
-        
-            
-        buffer = ByteBuffer()
-        buffer.write_int(1)
-        for i in client.match.player2_energy:
-            buffer.write_int(i)
-        client.match.last_package = match_data
-        client.match.player1_package = True
-        buffer.write_bytes(match_data)
-        buffer.write_byte(b'\x1f\x1f\x1f')
-        client.match.player2.connection.write(buffer.get_byte_array())
+        client.match.player2.connection.write(message)
     elif client == client.match.player2:
-        client.match.player2_energy = energy_pool
-        print("Sending communication to player 1!")
-        client.match.first_turn -= 1
-        if client.match.first_turn < 0:
-            client.match.first_turn = 0
-        if not client.match.first_turn:
-            client.match.player1_energy = generate_energy(energy_cont, client.match.player1_energy)
-        buffer = ByteBuffer()
-        buffer.write_int(1)
-        for i in client.match.player1_energy:
-            buffer.write_int(i)
-        client.match.last_package = match_data
-        client.match.player1_package = False
-        buffer.write_bytes(match_data)
-        buffer.write_byte(b'\x1f\x1f\x1f')
-        client.match.player1.connection.write(buffer.get_byte_array())
+        client.match.player1.connection.write(message)
+    else:
+        pass #TODO: add custom error
 
-    buffer.clear()
 
 def generate_energy(energy_cont, energy):
     for i in range(4):

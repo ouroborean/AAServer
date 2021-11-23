@@ -1,10 +1,13 @@
 import hashlib
 import io
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Type
-
+from typing import TYPE_CHECKING, Type, Tuple
+from server.byte_buffer import ByteBuffer
+from server.client import client_db
+from server.player_status import PlayerStatus
+from server.match_manager import manager
 if TYPE_CHECKING:
-    from server.managers.accounts import AccountManager
+    from server.managers.accounts import AccountManager, AccountRecord
 
 SALT = b'gawr gura for president'
 
@@ -13,16 +16,148 @@ MAX_USERNAME_SIZE = 420
 MAX_PASSWORD_SIZE = 420
 
 
-def handle_login(raw_data: bytes, client, accounts: 'AccountManager'):
+def handle_login(raw_data: bytes, client, accounts: 'AccountManager') -> Tuple[bool, list]:
     attempt = LoginAttempt.from_network_message(raw_data)
     if stored := accounts.get(attempt.username):
         if attempt.password_digest == stored.password_digest:
-            pass # successful login
+            if stored.username in client_db and client_db[stored.username] == PlayerStatus.ONLINE:
+                return bundle_login_failure("Account currently logged in.")
+            else:
+                client.username = stored.username
+                reconnecting = (client.username in client_db and client_db[client.username] == PlayerStatus.DISCONNECTED)
+                client_db[client.username] = PlayerStatus.ONLINE
+                return [reconnecting, get_player_info(stored)]
         else:
-            pass # password doesn't match
+            return bundle_login_failure("No account with matching credentials found.")
     else:
-        pass # No account with that name found
+        return bundle_login_failure("No account with matching credentials found.")
 
+def handle_reconnection(client) -> list:
+    for match in manager.matches.values():
+        if match.match_id[0] == client.username or match.match_id[1] == client.username:
+            match.rejoin_match(client)
+    if client == client.match.player1:
+        return get_player1_reconnection_info(client)
+    elif client == client.match.player2:
+        return get_player2_reconnection_info(client)
+
+def get_player1_reconnection_info(client) -> list:
+    buffer = ByteBuffer()
+    # Attach reconnection message tag
+    buffer.write_int(6)
+
+    # Encode reconnecting player's team/player information
+    for name in client.match.player1_start_package.characters:
+        buffer.write_string(name)
+    buffer.write_int(len(client.match.player1_start_package.player_package))
+    buffer.write_bytes(client.match.player1_start_package.player_package)
+
+    # Encode information regarding whose turn it currently is
+    # and the owner of the last turn data the server received
+    if client.match.player1_turn:
+        buffer.write_int(1)
+    else:
+        buffer.write_int(0)
+    if client.match.player1_package:
+        buffer.write_int(1)
+    else:
+        buffer.write_int(0)
+
+    # Encode the player's energy pool
+    for i in client.match.player1_energy:
+        buffer.write_int(i)
+    
+    # Encode enemy player's team/player information
+    for name in client.match.player2_start_package.characters:
+        buffer.write_string(name)
+    buffer.write_int(len(client.match.player2_start_package.player_package))
+    buffer.write_bytes(client.match.player2_start_package.player_package)
+
+    # If the server has received ANY turns, encode a tag denoting
+    # the existence of (or lack thereof) turn information, then that
+    # turn information if it exists
+    if client.match.last_package:
+        buffer.write_int(1)
+        buffer.write_bytes(client.match.last_package)
+    else:
+        buffer.write_int(0)
+
+    # Encode message termination
+    buffer.write_byte(b'\x1f\x1f\x1f')
+
+    return buffer.get_byte_array()
+
+def get_player2_reconnection_info(client) -> list:
+    buffer = ByteBuffer()
+    # Attach reconnection message tag
+    buffer.write_int(6)
+
+    # Encode reconnecting player's team/player information
+    for name in client.match.player2_start_package.characters:
+        buffer.write_string(name)
+    buffer.write_int(len(client.match.player2_start_package.player_package))
+    buffer.write_bytes(client.match.player2_start_package.player_package)
+
+    # Encode information regarding whose turn it currently is
+    # and the owner of the last turn data the server received
+    if client.match.player1_turn:
+        buffer.write_int(0)
+    else:
+        buffer.write_int(1)
+    if client.match.player1_package:
+        buffer.write_int(0)
+    else:
+        buffer.write_int(1)
+
+    # Encode the player's energy pool
+    for i in client.match.player2_energy:
+        buffer.write_int(i)
+    
+    # Encode enemy player's team/player information
+    for name in client.match.player1_start_package.characters:
+        buffer.write_string(name)
+    buffer.write_int(len(client.match.player1_start_package.player_package))
+    buffer.write_bytes(client.match.player1_start_package.player_package)
+
+    # If the server has received ANY turns, encode a tag denoting
+    # the existence of (or lack thereof) turn information, then that
+    # turn information if it exists
+    if client.match.last_package:
+        buffer.write_int(1)
+        buffer.write_bytes(client.match.last_package)
+    else:
+        buffer.write_int(0)
+
+    # Encode message termination
+    buffer.write_byte(b'\x1f\x1f\x1f')
+    
+    return buffer.get_byte_array()
+
+def get_player_info(account: 'AccountRecord') -> list:
+    buffer = ByteBuffer()
+    buffer.write_int(3)
+    player_data = account.user_data.split("/")
+    wins = player_data[0]
+    losses = player_data[1]
+    buffer.write_int(int(wins))
+    buffer.write_int(int(losses))
+    if account.avatar_file:
+        buffer.write_int(1)
+        with open(account.avatar_file, "rb") as f:
+            ava_code = f.read()
+        buffer.write_int(len(ava_code))
+        buffer.write_bytes(ava_code)
+    else:
+        buffer.write_int(0)
+    buffer.write_byte(b'\x1f\x1f\x1f')
+    return buffer.get_byte_array()
+
+def bundle_login_failure(message: str) -> Tuple[bool, list]:
+    buffer = ByteBuffer()
+    buffer.write_int(2)
+    buffer.write_string(message)
+    buffer.write_byte(b'\x1f\x1f\x1f')
+    return [False, buffer.get_byte_array()]
 
 @dataclass
 class LoginAttempt:
@@ -47,7 +182,8 @@ class LoginAttempt:
     def from_network_message(cls: 'Type[LoginAttempt]',
                              msg_payload: bytes) -> 'LoginAttempt':
         raw_message = io.BytesIO(msg_payload)
-        msg_type = raw_message.read(INT_SIZE)
+        msg_type = int.from_bytes(raw_message.read(INT_SIZE), 'big')
+        
         assert msg_type == 2, "Invalid message tag!"
 
         username_len_raw = raw_message.read(INT_SIZE)

@@ -23,6 +23,8 @@ class ByteBuffer():
     
     def clear(self):
         self.buff = []
+        self.read_pos = 0
+        self.buff_updated = False
     
     def write_byte(self, input: bytes):
         self.buff.extend(input)

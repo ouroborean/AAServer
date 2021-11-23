@@ -1,14 +1,17 @@
+from typing import TYPE_CHECKING
 from server import client
 from server.client import Client, client_db
 from server.player_status import PlayerStatus
 import random
+if TYPE_CHECKING:
+    from server.handlers.start_package import StartPackage
 
 class Match():
 
     player1: Client
     player2: Client
-    player1_start_package: list
-    player2_start_package: list
+    player1_start_package: 'StartPackage'
+    player2_start_package: 'StartPackage'
     player1_energy: list
     player2_energy: list
     last_package: list
@@ -18,7 +21,7 @@ class Match():
     first_turn: int
     player1_package: bool
 
-    def __init__(self, player1: Client, start_package: list):
+    def __init__(self, player1: Client, start_package: 'StartPackage'):
         self.player1 = player1
         self.player1_turn = True
         self.player1.match = self
@@ -31,7 +34,7 @@ class Match():
         self.match_id.append(player1.username)
         self.player1_start_package = start_package
 
-    def finish_forming_match(self, player2: Client, start_package: list):
+    def finish_forming_match(self, player2: Client, start_package: 'StartPackage'):
         self.player2 = player2
         self.player2.match = self
         self.match_id.append(player2.username)

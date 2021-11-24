@@ -41,53 +41,6 @@ def send_login_failure(client, message):
     buffer.write_byte(b'\x1f\x1f\x1f')
     client.connection.write(buffer.get_byte_array())
     buffer.clear()
-    
-def send_reconnection(client):
-    buffer = ByteBuffer()
-    buffer.write_int(6)
-    if client == client.match.player1:
-        print("Sending reconnection to Player 1!")
-        buffer.write_bytes(client.match.player1_start_package)
-        if client.match.player1_turn:
-            buffer.write_int(1)
-        else:
-            buffer.write_int(0)
-        if client.match.player1_package:
-            buffer.write_int(1)
-        else:
-            buffer.write_int(0)
-        for i in client.match.player1_energy:
-            buffer.write_int(i)
-        buffer.write_bytes(client.match.player2_start_package)
-        if client.match.last_package:        
-            buffer.write_int(1)
-            buffer.write_bytes(client.match.last_package)
-        else:
-            buffer.write_int(0)
-        buffer.write_byte(b'\x1f\x1f\x1f')
-        client.connection.write(buffer.get_byte_array())
-    elif client == client.match.player2:
-        print("Sending reconnection to Player 2!")
-        buffer.write_bytes(client.match.player2_start_package)
-        if client.match.player1_turn:
-            buffer.write_int(0)
-        else:
-            buffer.write_int(1)
-        if client.match.player1_package:
-            buffer.write_int(0)
-        else:
-            buffer.write_int(1)
-        for i in client.match.player2_energy:
-            buffer.write_int(i)
-        buffer.write_bytes(client.match.player1_start_package)
-        if client.match.last_package:        
-            buffer.write_int(1)
-            buffer.write_bytes(client.match.last_package)
-        else:
-            buffer.write_int(0)
-        buffer.write_byte(b'\x1f\x1f\x1f')
-        client.connection.write(buffer.get_byte_array())
-    buffer.clear()
 
 def send_login_confirmation(client, wins, losses, avatar=None):
     buffer = ByteBuffer()

@@ -1,18 +1,12 @@
 from server import match
 from server.byte_buffer import ByteBuffer
 from server.match_manager import manager
-from server.player_status import PlayerStatus
-from server.managers import accounts
 from server.managers.accounts import AccountManager
-from typing import Callable
-from server.client import client_db
 from pathlib import Path
+import sys
 import dill as pickle
 import os
 import random
-import hashlib
-from os import listdir
-from os.path import isfile, join
 
 from server.handlers import login, match_communication, register, start_package
 
@@ -20,12 +14,23 @@ SALT = b'gawr gura for president'
 
 account_manager = AccountManager(Path(r"C:\Users\poofl\Documents\Code\AAServer"))
 
+VERSION = "0.9.1"
+
+def handle_version_check(data: list, client):
+    print(f"Returning: Version {VERSION}")
+    buffer = ByteBuffer()
+    buffer.write_int(7)
+    buffer.write_string(VERSION)
+    buffer.write_byte(b'\x1f\x1f\x1f')
+    client.connection.write(buffer.get_byte_array())
+    buffer.clear()
+
+
 def handle_login_attempt(data: list, client):
     # Attempt login and retrieve message to send back to client, either:
     #   A: A successful login package, with player and account information
     #   B: A failure message
     reconnecting, login_result = login.handle_login(bytes(data), client, account_manager)
-
     # Send message back to client
 
     client.connection.write(login_result)
@@ -33,30 +38,6 @@ def handle_login_attempt(data: list, client):
     # Handle reconnection if the client is shown as having disconnected from a game
     if reconnecting:
         client.connection.write(login.handle_reconnection(client))
-
-def send_login_failure(client, message):
-    buffer = ByteBuffer()
-    buffer.write_int(2)
-    buffer.write_string(message)
-    buffer.write_byte(b'\x1f\x1f\x1f')
-    client.connection.write(buffer.get_byte_array())
-    buffer.clear()
-
-def send_login_confirmation(client, wins, losses, avatar=None):
-    buffer = ByteBuffer()
-    buffer.write_int(3)
-    buffer.write_int(wins)
-    buffer.write_int(losses)
-    if avatar:
-        buffer.write_int(1)
-        buffer.write_int(len(list(avatar)))
-        buffer.write_bytes(list(avatar))
-    else:
-        buffer.write_int(0)
-    buffer.write_byte(b'\x1f\x1f\x1f')
-    #TODO: Add character unlock information
-    client.connection.write(buffer.get_byte_array())
-    buffer.clear()
 
 def handle_avatar_update(data:list, client):
     buffer = ByteBuffer()
@@ -70,7 +51,7 @@ def handle_avatar_update(data:list, client):
 def handle_registration(data: list, client):
     # Attempt registration and retrieve a response string to send back to the client
     registration_result = register.handle_register(bytes(data), client, account_manager)
-
+    
     # Send response string to client
     client.connection.write(registration_result)
 
@@ -138,14 +119,6 @@ def add_a_loss(client):
     with open(f"accounts/{client.username}data.dat", "w") as f:
         f.write(data)
 
-def send_registration(client, message):
-    buffer = ByteBuffer()
-    buffer.write_int(4)
-    buffer.write_string(message)
-    buffer.write_byte(b'\x1f\x1f\x1f')
-    client.connection.write(buffer.get_byte_array())
-    buffer.clear()
-
 def handle_start_package(data: list, client):
     
     if start_package_response := start_package.handle_start_package(bytes(data), client):
@@ -169,20 +142,6 @@ def send_surrender_notification(client):
     client.connection.write(buffer.get_byte_array())
     buffer.clear()
 
-def send_opponent_package(client, energy, package, first_turn):
-    print("Opponent package sent!")
-    buffer = ByteBuffer()
-    buffer.write_int(0)
-    if first_turn:
-        buffer.write_int(1)
-    else:
-        buffer.write_int(0)
-    for i in energy:
-        buffer.write_int(i)
-    buffer.write_bytes(package)
-    buffer.write_byte(b'\x1f\x1f\x1f')
-    client.connection.write(buffer.get_byte_array())
-
 def handle_match_communication(data: list, client):
     
     message = match_communication.handle_match_communication(bytes(data), client)
@@ -193,22 +152,6 @@ def handle_match_communication(data: list, client):
         client.match.player1.connection.write(message)
     else:
         pass #TODO: add custom error
-
-
-def generate_energy(energy_cont, energy):
-    for i in range(4):
-        energy[i] += energy_cont[i]
-    if energy_cont[4] > 0:
-        for i in range(energy_cont[4]):
-            energy[random.randint(0,3)] += 1
-    else:
-        drain = -energy_cont[4]
-        while drain > 0:
-            e_type = random.randint(0,3)
-            if energy[e_type] > 0:
-                energy[e_type] -= 1
-                drain -= 1
-    return energy
 
 
 def handle_match_ending(data: list, client):
@@ -229,7 +172,8 @@ packets: dict = {
     6: handle_surrender,
     7: handle_search_cancellation,
     8: handle_match_ending,
-    9: process_match_stats
+    9: process_match_stats,
+    10: handle_version_check
 }
 
 

@@ -4,9 +4,8 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Type
 from server.byte_buffer import ByteBuffer
 
-from server.handlers.login import INT_SIZE, MAX_PASSWORD_SIZE, MAX_USERNAME_SIZE
 if TYPE_CHECKING:
-    from server.managers.accounts import AccountManager, AccountRecord
+    from server.managers.accounts import AccountManager
 
 SALT = b'gawr gura for president'
 

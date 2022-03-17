@@ -23,6 +23,7 @@ class Match():
 
     def __init__(self, player1: Client, start_package: 'StartPackage'):
         self.player1 = player1
+        self.player2 = None
         self.player1_turn = True
         self.player1.match = self
         self.player1_package = False
@@ -73,4 +74,7 @@ class Match():
 
 
     def get_match_id(self):
-        return self.match_id[0] + "/" + self.match_id[1]
+        if len(self.match_id) == 2:
+            return self.match_id[0] + "/" + self.match_id[1]
+        else:
+            return self.match_id[0]

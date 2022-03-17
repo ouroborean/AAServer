@@ -14,7 +14,7 @@ SALT = b'gawr gura for president'
 
 account_manager = AccountManager(Path(r"C:\Users\poofl\Documents\Code\AAServer"))
 
-VERSION = "0.9.1"
+VERSION = "0.9.8"
 
 def handle_version_check(data: list, client):
     print(f"Returning: Version {VERSION}")
@@ -32,7 +32,7 @@ def handle_login_attempt(data: list, client):
     #   B: A failure message
     reconnecting, login_result = login.handle_login(bytes(data), client, account_manager)
     # Send message back to client
-
+    print(len(login_result))
     client.connection.write(login_result)
 
     # Handle reconnection if the client is shown as having disconnected from a game
@@ -45,7 +45,7 @@ def handle_avatar_update(data:list, client):
     buffer.read_int()
     length = buffer.read_int()
     ava_code = bytes(buffer.read_bytes(length))
-    with open(f"accounts/avatars/{client.username}.dat", "wb") as f:
+    with open(account_manager._avatars_dir / f"{client.username}.dat", "wb") as f:
         f.write(ava_code)
 
 def handle_registration(data: list, client):
@@ -101,23 +101,34 @@ def handle_player_update(data: list, client):
     buffer.read_int()
     wins = buffer.read_int()
     losses = buffer.read_int()
-
-    data = f"{wins}/{losses}"
-    
+    medals = buffer.read_int()
+    missions = buffer.read_string()
+    print(f"Updating {client.username} to W: {wins} / L: {losses}")
+    data = f"{wins}/{losses}/{medals}"
+    write_data = data + "|" + missions
     with open(f"accounts/{client.username}data.dat", "w") as f:
-        f.write(data)
+        f.write(write_data)
 
 def add_a_loss(client):
     with open(f"accounts/{client.username}data.dat") as f:
         data = f.read().strip()
-        player_data = data.split("/")
-        wins = int(player_data[0])
-        losses = int(player_data[1])
+        player_data = data.split("|")
+        win_loss = player_data[0].split("/")
+        wins = int(win_loss[0])
+        losses = int(win_loss[1])
+        medals = int(win_loss[2])
         losses += 1
-        data = f"{wins}/{losses}"
+        print(f"Updating {client.username} to W: {wins} / L: {losses}")
+        data = f"{wins}/{losses}/{medals}"
     
+    with open(f"accounts/{client.username}data.dat", "r") as f:
+        player_data = f.read().split("|")
+        player_data[0] = data
+        write_data = "|".join(player_data)
+        #TODO add updates to mission data
+
     with open(f"accounts/{client.username}data.dat", "w") as f:
-        f.write(data)
+        f.write(write_data)
 
 def handle_start_package(data: list, client):
     
@@ -130,13 +141,30 @@ def handle_start_package(data: list, client):
 
 def handle_surrender(data: list, client):
         if client == client.match.player1:
-            send_surrender_notification(client.match.player2)
+            send_surrender_notification(client.match.player2, data)
         elif client == client.match.player2:
-            send_surrender_notification(client.match.player1)
+            send_surrender_notification(client.match.player1, data)
+        handle_match_ending([], client)
 
-def send_surrender_notification(client):
+def send_surrender_notification(client, data: bytes):
+
+    temp_buffer = ByteBuffer()
+    temp_buffer.write_bytes(data)
+    temp_buffer.read_int()
+    mission_packages = []
+    for _ in range(3):
+            mission_package = [temp_buffer.read_int() for _ in range(5)]
+            mission_packages.append(mission_package)
+
+
+
     buffer = ByteBuffer()
     buffer.write_int(5)
+
+    for mission_progress_package in mission_packages:
+            for mission_progress in mission_progress_package:
+                buffer.write_int(mission_progress)
+
     buffer.write_byte(b'\x1f\x1f\x1f')
 
     client.connection.write(buffer.get_byte_array())
@@ -159,6 +187,7 @@ def handle_match_ending(data: list, client):
 
 def handle_search_cancellation(data: list, client):
     manager.waiting_matches.clear()
+
 
 
 

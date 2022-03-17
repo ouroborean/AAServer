@@ -24,25 +24,26 @@ async def handle_echo(reader, writer):
     if client.username != "":
         print(f"Player {client.username} disconnected from server.")
         if client.match:
-            if client == client.match.player1:
+            if client == client.match.player1 and client.match.get_match_id() in manager.matches:
                 if client_db[client.match.player2.username] == PlayerStatus.DISCONNECTED:
                     data_handler.add_a_loss(client)
                     data_handler.add_a_loss(client.match.player2)
                     client_db[client.match.player2.username] = PlayerStatus.OFFLINE
                     client_db[client.username] = PlayerStatus.OFFLINE
-                    manager.matches.pop(client.match.get_match_id())
-                    
+                    data_handler.handle_match_ending([], client)
                 else:
                     client_db[client.username] = PlayerStatus.DISCONNECTED
-            elif client == client.match.player2:
+            elif client.match.player2 and client == client.match.player2 and client.match.get_match_id() in manager.matches:
                 if client_db[client.match.player1.username] == PlayerStatus.DISCONNECTED:
                     data_handler.add_a_loss(client)
                     data_handler.add_a_loss(client.match.player1)
                     client_db[client.match.player1.username] = PlayerStatus.OFFLINE
                     client_db[client.username] = PlayerStatus.OFFLINE
-                    manager.matches.pop(client.match.get_match_id())
+                    data_handler.handle_match_ending([], client)
                 else:
                     client_db[client.username] = PlayerStatus.DISCONNECTED
+            else: 
+                client_db[client.username] = PlayerStatus.OFFLINE
         else:
             client_db.pop(client.username)
         for match in manager.waiting_matches:
@@ -52,7 +53,7 @@ async def handle_echo(reader, writer):
 
 
 async def main():
-    server = await asyncio.start_server(handle_echo, host="127.0.0.1", port=5692)
+    server = await asyncio.start_server(handle_echo, port=5692)
     async with server:
         await server.serve_forever()
 

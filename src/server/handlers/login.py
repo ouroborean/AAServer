@@ -6,6 +6,7 @@ from server.byte_buffer import ByteBuffer
 from server.client import client_db
 from server.player_status import PlayerStatus
 from server.match_manager import manager
+from server.handlers.register import characters
 if TYPE_CHECKING:
     from server.managers.accounts import AccountManager, AccountRecord
 
@@ -133,14 +134,33 @@ def get_player2_reconnection_info(client) -> list:
     
     return buffer.get_byte_array()
 
+
+def check_for_new_character_info(mission_data):
+    characters_to_add = []
+    mission_dict = {}
+    for mission_set in mission_data.split("|"):
+        missions = mission_set.split("/")
+        mission_dict[missions[0]] = []
+    for character in characters:
+        if not character in mission_dict:
+            characters_to_add.append(character)
+    
+    for character in characters_to_add:
+        mission_data = mission_data + "|" + character + "/0/0/0/0/0/0"
+    
+    return mission_data
+
 def get_player_info(account: 'AccountRecord') -> list:
     buffer = ByteBuffer()
     buffer.write_int(3)
-    player_data = account.user_data.split("/")
-    wins = player_data[0]
-    losses = player_data[1]
+    player_data = account.user_data.split("|")
+    wins, losses, medals = player_data[0].split("/")
+    mission_data = "|".join(player_data[1:]).strip()
+    mission_data = check_for_new_character_info(mission_data)
     buffer.write_int(int(wins))
     buffer.write_int(int(losses))
+    buffer.write_int(int(medals))
+    buffer.write_string(mission_data)
     if account.avatar_file:
         buffer.write_int(1)
         with open(account.avatar_file, "rb") as f:

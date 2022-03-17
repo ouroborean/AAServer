@@ -15,7 +15,8 @@ MAX_PASSWORD_SIZE = 420
 
 def handle_register(raw_data: bytes, client, accounts: 'AccountManager') -> list:
     attempt = RegisterAttempt.from_network_message(raw_data)
-    if stored := accounts.get(attempt.username):
+    stored = accounts.get(attempt.username)
+    if stored:
         return bundle_response("Registration failed: Account already exists.")
     else:
         create_new_data_files(attempt, accounts)
@@ -24,7 +25,27 @@ def handle_register(raw_data: bytes, client, accounts: 'AccountManager') -> list
 
 def create_new_data_files(attempt: 'RegisterAttempt', account_manager: 'AccountManager'):
     with open(account_manager._accounts_dir / f"{attempt.username}data.dat", "w") as f:
-        f.write("0/0") #TODO: add character mission details
+        mission_data = [name + "/0/0/0/0/0|" for name in characters]
+
+        mission_data = ""
+
+        free_characters = ["naruto", "ichigo", "tsunayoshi", "saber", "midoriya", "tatsumi", "snowwhite", "natsu", "misaka"]
+
+        for name in characters:
+            mission_data += name
+            mission_stack = ""
+            if name in free_characters:
+                mission_stack = "/0/0/0/0/0/1|"
+            else:
+                mission_stack = "/0/0/0/0/0/0|"
+            mission_data += mission_stack
+
+        mission_string = "".join(mission_data)
+        mission_string = mission_string[:-1]
+        new_data_string = "0/0/15|"
+        lines = [new_data_string, mission_string]
+        f.writelines(lines)
+
     with open(account_manager._accounts_dir / f"{attempt.username}pass.dat", "w") as f:
         f.write(attempt.password_digest)
 
@@ -87,3 +108,78 @@ def _hash_the_password(password: str) -> str:
                             r=8,
                             p=1)
     return digest.hex()
+
+
+
+characters = ["naruto",
+              "itachi",
+              "minato",
+              "neji",
+              "hinata",
+              "shikamaru",
+              "kakashi",
+              "ichigo",
+              "orihime",
+              "rukia",
+              "ichimaru",
+              "aizen",
+              "midoriya",
+              "toga",
+              "mirio",
+              "shigaraki",
+              "todoroki",
+              "uraraka",
+              "jiro",
+              "natsu",
+              "gray",
+              "gajeel",
+              "wendy",
+              "erza",
+              "levy",
+              "laxus",
+              "lucy",
+              "saber",
+              "jack",
+              "chu",
+              "astolfo",
+              "frankenstein",
+              "gilgamesh",
+              "jeanne",
+              "misaka",
+              "kuroko",
+              "sogiita",
+              "misaki",
+              "frenda",
+              "naruha",
+              "tsunayoshi",
+              "yamamoto",
+              "hibari",
+              "gokudera",
+              "ryohei",
+              "lambo",
+              "chrome",
+              "tatsumi",
+              "mine",
+              "akame",
+              "leone",
+              "raba",
+              "sheele",
+              "seryu",
+              "kurome",
+              "esdeath",
+              "snowwhite",
+              "ruler",
+              "ripple",
+              "nemu",
+              "cmary",
+              "cranberry",
+              "swimswim",
+              "pucelle",
+              "chachamaru",
+              "saitama",
+              "tatsumaki",
+              "mirai",
+              "touka",
+              "killua",
+              "sheele",
+              "byakuya"]

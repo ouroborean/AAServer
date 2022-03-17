@@ -1,6 +1,8 @@
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Iterator, NamedTuple, Optional
+from server.handlers.register import characters
+
 
 
 class AccountRecord(NamedTuple):
@@ -8,7 +10,7 @@ class AccountRecord(NamedTuple):
     user_data: str
     password_digest: str
     avatar_file: Optional[Path] = None
-    # player_stats: ...
+
 
 
 class AccountManager(Mapping[str, AccountRecord]):

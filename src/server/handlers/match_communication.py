@@ -36,7 +36,7 @@ def process_player2_turn(communication: 'MatchCommunication', client):
     client.match.player2_energy = communication.player_energy
     client.match.player1_package = False
     if not client.match.first_turn:
-        client.match.player1_energy = generate_energy(communication.enemy_energy_cont, client.match.player2_energy)
+        client.match.player1_energy = generate_energy(communication.enemy_energy_cont, client.match.player1_energy)
 
 def package_player2_message(communication: 'MatchCommunication', client) -> list:
     buffer = ByteBuffer()

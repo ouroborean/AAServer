@@ -106,7 +106,7 @@ def handle_player_update(data: list, client):
     print(f"Updating {client.username} to W: {wins} / L: {losses}")
     data = f"{wins}/{losses}/{medals}"
     write_data = data + "|" + missions
-    with open(f"accounts/{client.username}data.dat", "w") as f:
+    with open(account_manager._accounts_dir / f"{client.username}data.dat", "w") as f:
         f.write(write_data)
 
 def add_a_loss(client):
@@ -121,13 +121,13 @@ def add_a_loss(client):
         print(f"Updating {client.username} to W: {wins} / L: {losses}")
         data = f"{wins}/{losses}/{medals}"
     
-    with open(f"accounts/{client.username}data.dat", "r") as f:
+    with open(account_manager._accounts_dir / f"{client.username}data.dat", "r") as f:
         player_data = f.read().split("|")
         player_data[0] = data
         write_data = "|".join(player_data)
         #TODO add updates to mission data
 
-    with open(f"accounts/{client.username}data.dat", "w") as f:
+    with open(account_manager._accounts_dir / f"{client.username}data.dat", "w") as f:
         f.write(write_data)
 
 def handle_start_package(data: list, client):

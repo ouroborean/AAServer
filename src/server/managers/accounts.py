@@ -38,6 +38,18 @@ class AccountManager(Mapping[str, AccountRecord]):
             password_digest=password_file.read_text(),
             avatar_file=avatar_file if avatar_file.is_file() else None)
 
+    def update_avatar(self, username: str, avatar: bytes):
+        with open(self._avatars_dir / f"{username}.dat", "wb") as f:
+            f.write(avatar)
+
+    def update_data(self, username: str, data: str):
+        with open(self._accounts_dir / f"{username}data.dat", "w") as f:
+            f.write(data)
+    
+    def get_player_data(self, username: str):
+        with open(self._accounts_dir / f"{username}data.dat", "r") as f:
+            return f.read().strip()
+
     def __iter__(self) -> Iterator[str]:
         yield from (p.stem.removesuffix('pass')
                     for p in self._accounts_dir.glob('*pass.dat'))

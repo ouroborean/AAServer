@@ -5,10 +5,10 @@ from typing import TYPE_CHECKING, Type, Tuple
 from server.byte_buffer import ByteBuffer
 from server.client import client_db
 from server.player_status import PlayerStatus
-from server.match_manager import manager
 from server.handlers.register import characters
 if TYPE_CHECKING:
     from server.managers.accounts import AccountManager, AccountRecord
+    from server.managers.matches import MatchManager
 
 SALT = b'gawr gura for president'
 
@@ -33,8 +33,8 @@ def handle_login(raw_data: bytes, client, accounts: 'AccountManager') -> Tuple[b
     else:
         return bundle_login_failure("No account with matching credentials found.")
 
-def handle_reconnection(client) -> list:
-    for match in manager.matches.values():
+def handle_reconnection(client, match_manager: "MatchManager") -> list:
+    for match in match_manager.matches.values():
         if match.match_id[0] == client.username or match.match_id[1] == client.username:
             match.rejoin_match(client)
     if client == client.match.player1:

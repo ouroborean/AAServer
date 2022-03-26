@@ -2,10 +2,8 @@ import hashlib
 import io
 import random
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Type
+from typing import Type
 from server.byte_buffer import ByteBuffer
-from server.match import Match
-from server.match_manager import manager
 
 
 INT_SIZE = 4

@@ -2,29 +2,27 @@ import io
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Type
 from server.byte_buffer import ByteBuffer
-from server.client import client_db
-from server.player_status import PlayerStatus
-from server.match_manager import manager
 from typing import Optional, Tuple
 if TYPE_CHECKING:
     from server.managers.accounts import AccountManager, AccountRecord
+    from server.managers.matches import MatchManager
 
 INT_SIZE = 4
 MAX_USERNAME_SIZE = 420
 MAX_PASSWORD_SIZE = 420
 
-def handle_start_package(raw_data: bytes, client) -> Optional[Tuple[str, list, list]]:
+def handle_start_package(raw_data: bytes, client, manager: "MatchManager") -> Optional[Tuple[str, list, list]]:
     package = StartPackage.from_network_message(raw_data)
     if len(manager.waiting_matches) == 0:
         manager.create_open_match(client, package)
         return None
     else:
         mID = manager.close_match(client, package)
-        p1_message = get_player1_start_package(mID)
-        p2_message = get_player2_start_package(mID)
+        p1_message = get_player1_start_package(mID, manager)
+        p2_message = get_player2_start_package(mID, manager)
         return [mID, p1_message, p2_message]
 
-def get_player1_start_package(mID: str) -> list:
+def get_player1_start_package(mID: str, manager: "MatchManager") -> list:
     buffer = ByteBuffer()
     buffer.write_int(0)
     if manager.matches[mID].player1_first:
@@ -40,7 +38,7 @@ def get_player1_start_package(mID: str) -> list:
     buffer.write_byte(b'\x1f\x1f\x1f')
     return buffer.get_byte_array()
 
-def get_player2_start_package(mID: str) -> list:
+def get_player2_start_package(mID: str, manager: "MatchManager") -> list:
     buffer = ByteBuffer()       
     buffer.write_int(0)
     if manager.matches[mID].player1_first:

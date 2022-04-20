@@ -37,7 +37,7 @@ def create_new_data_files(attempt: 'RegisterAttempt', account_manager: 'AccountM
             if name in free_characters:
                 mission_stack = "/0/0/0/0/0/1|"
             else:
-                mission_stack = "/0/0/0/0/0/0|"
+                mission_stack = "/0/0/0/0/0/1|"
             mission_data += mission_stack
 
         mission_string = "".join(mission_data)
@@ -97,9 +97,8 @@ class RegisterAttempt:
 
         password_raw = raw_message.read(password_len)
         password = str(password_raw, encoding='utf-8')
-        password_digest = _hash_the_password(password)
 
-        return cls(username, password_digest)
+        return cls(username, password)
 
 def _hash_the_password(password: str) -> str:
     digest = hashlib.scrypt(password.encode(encoding='utf-8'),
@@ -151,6 +150,7 @@ characters = ["naruto",
               "misaki",
               "frenda",
               "naruha",
+              "accelerator",
               "tsunayoshi",
               "yamamoto",
               "hibari",
@@ -164,6 +164,7 @@ characters = ["naruto",
               "leone",
               "raba",
               "sheele",
+              "chelsea",
               "seryu",
               "kurome",
               "esdeath",

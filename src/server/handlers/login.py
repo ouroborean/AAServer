@@ -3,7 +3,7 @@ import io
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Type, Tuple
 from server.byte_buffer import ByteBuffer
-from server.client import client_db
+from server.client import client_db, Client
 from server.player_status import PlayerStatus
 from server.handlers.register import characters
 if TYPE_CHECKING:
@@ -17,10 +17,11 @@ MAX_USERNAME_SIZE = 420
 MAX_PASSWORD_SIZE = 420
 
 
+
 def handle_login(raw_data: bytes, client, accounts: 'AccountManager') -> Tuple[bool, list]:
     attempt = LoginAttempt.from_network_message(raw_data)
     if stored := accounts.get(attempt.username):
-        if attempt.password_digest == stored.password_digest:
+        if compare_passwords(attempt, stored, client):
             if stored.username in client_db and client_db[stored.username] == PlayerStatus.ONLINE:
                 return bundle_login_failure("Account currently logged in.")
             else:
@@ -42,53 +43,65 @@ def handle_reconnection(client, match_manager: "MatchManager") -> list:
     elif client == client.match.player2:
         return get_player2_reconnection_info(client)
 
-def get_player1_reconnection_info(client) -> list:
+def get_player1_reconnection_info(client: Client) -> list:
     buffer = ByteBuffer()
     # Attach reconnection message tag
     buffer.write_int(6)
 
+
     # Encode reconnecting player's team/player information
     for name in client.match.player1_start_package.characters:
         buffer.write_string(name)
-    buffer.write_int(len(client.match.player1_start_package.player_package))
-    buffer.write_bytes(client.match.player1_start_package.player_package)
 
-    # Encode information regarding whose turn it currently is
-    # and the owner of the last turn data the server received
-    if client.match.player1_turn:
-        buffer.write_int(1)
-    else:
-        buffer.write_int(0)
-    if client.match.player1_package:
-        buffer.write_int(1)
-    else:
-        buffer.write_int(0)
 
-    # Encode the player's energy pool
-    for i in client.match.player1_energy:
-        buffer.write_int(i)
-    
+    # Encode enemy player's player package information
+    package = client.match.player2_start_package.player_package
+
+    buffer.write_string(package[0])
+    buffer.write_int(package[1])
+    buffer.write_int(package[2])
+    buffer.write_string(package[3])
+    buffer.write_int(package[4])
+    buffer.write_int(package[5])
+    buffer.write_int(len(package[6]))
+    buffer.write_bytes(package[6])
+
+
     # Encode enemy player's team/player information
     for name in client.match.player2_start_package.characters:
         buffer.write_string(name)
-    buffer.write_int(len(client.match.player2_start_package.player_package))
-    buffer.write_bytes(client.match.player2_start_package.player_package)
 
-    # If the server has received ANY turns, encode a tag denoting
-    # the existence of (or lack thereof) turn information, then that
-    # turn information if it exists
-    if client.match.last_package:
+    # Encode whether player 1 went first or not
+    if client.match.player1_first:
         buffer.write_int(1)
-        buffer.write_bytes(client.match.last_package)
+    else:
+        buffer.write_int(0)
+        
+    if client.match.player1_turn:
+        buffer.write_int(client.match.turn_timer.time_left)
+        print(client.match.turn_timer.time_left)
     else:
         buffer.write_int(0)
 
+    # Encode history of ability messages
+    buffer.write_int(len(client.match.turn_history))
+
+    for message in client.match.turn_history:
+        buffer.write_bytes(message)
+
+    # Encode history of player 1's energy gain pools
+    buffer.write_int(len(client.match.player1_energy_history))
+
+    for pool in client.match.player1_energy_history:
+        for i in pool:
+            buffer.write_int(i)
+
+
     # Encode message termination
     buffer.write_byte(b'\x1f\x1f\x1f')
-
     return buffer.get_byte_array()
 
-def get_player2_reconnection_info(client) -> list:
+def get_player2_reconnection_info(client: Client) -> list:
     buffer = ByteBuffer()
     # Attach reconnection message tag
     buffer.write_int(6)
@@ -96,42 +109,53 @@ def get_player2_reconnection_info(client) -> list:
     # Encode reconnecting player's team/player information
     for name in client.match.player2_start_package.characters:
         buffer.write_string(name)
-    buffer.write_int(len(client.match.player2_start_package.player_package))
-    buffer.write_bytes(client.match.player2_start_package.player_package)
 
-    # Encode information regarding whose turn it currently is
-    # and the owner of the last turn data the server received
-    if client.match.player1_turn:
-        buffer.write_int(0)
-    else:
-        buffer.write_int(1)
-    if client.match.player1_package:
-        buffer.write_int(0)
-    else:
-        buffer.write_int(1)
 
-    # Encode the player's energy pool
-    for i in client.match.player2_energy:
-        buffer.write_int(i)
-    
+    # Encode enemy player's player package information
+    package = client.match.player1_start_package.player_package
+
+    buffer.write_string(package[0])
+    buffer.write_int(package[1])
+    buffer.write_int(package[2])
+    buffer.write_string(package[3])
+    buffer.write_int(package[4])
+    buffer.write_int(package[5])
+    buffer.write_int(len(package[6]))
+    buffer.write_bytes(package[6])
+
+
     # Encode enemy player's team/player information
     for name in client.match.player1_start_package.characters:
         buffer.write_string(name)
-    buffer.write_int(len(client.match.player1_start_package.player_package))
-    buffer.write_bytes(client.match.player1_start_package.player_package)
 
-    # If the server has received ANY turns, encode a tag denoting
-    # the existence of (or lack thereof) turn information, then that
-    # turn information if it exists
-    if client.match.last_package:
-        buffer.write_int(1)
-        buffer.write_bytes(client.match.last_package)
-    else:
+    # Encode whether player went first or not
+    if client.match.player1_first:
         buffer.write_int(0)
+    else:
+        buffer.write_int(1)
+
+    if client.match.player1_turn:
+        buffer.write_int(0)
+    else:
+        print(client.match.turn_timer.time_left)
+        buffer.write_int(client.match.turn_timer.time_left)
+
+    # Encode history of ability messages
+    buffer.write_int(len(client.match.turn_history))
+
+    for message in client.match.turn_history:
+        buffer.write_bytes(message)
+
+    # Encode history of player 2's energy gain pools
+    buffer.write_int(len(client.match.player2_energy_history))
+
+    for pool in client.match.player2_energy_history:
+        for i in pool:
+            buffer.write_int(i)
+
 
     # Encode message termination
     buffer.write_byte(b'\x1f\x1f\x1f')
-    
     return buffer.get_byte_array()
 
 
@@ -219,9 +243,8 @@ class LoginAttempt:
 
         password_raw = raw_message.read(password_len)
         password = str(password_raw, encoding='utf-8')
-        password_digest = _hash_the_password(password)
 
-        return cls(username, password_digest)
+        return cls(username, password)
 
 
 def _hash_the_password(password: str) -> str:
@@ -231,3 +254,14 @@ def _hash_the_password(password: str) -> str:
                             r=8,
                             p=1)
     return digest.hex()
+
+def nonce_the_digest(digest: str, nonce: int) -> str:
+    new_digest = hashlib.scrypt(digest.encode(encoding='utf-8'),
+                            salt=str(nonce).encode(encoding='utf-8'),
+                            n=16384,
+                            r=8,
+                            p=1)
+    return new_digest.hex()
+
+def compare_passwords(attempt: "LoginAttempt", account: 'AccountRecord', client: Client) -> bool:
+    return attempt.password_digest == nonce_the_digest(account.password_digest, client.nonce)

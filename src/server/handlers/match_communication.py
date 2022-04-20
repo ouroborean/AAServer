@@ -2,13 +2,15 @@ import hashlib
 import io
 import random
 from dataclasses import dataclass
-from typing import Type
+from typing import Type, TYPE_CHECKING
 from server.byte_buffer import ByteBuffer
 
+if TYPE_CHECKING:
+    from server.client import Client
 
 INT_SIZE = 4
 
-def handle_match_communication(raw_data: bytes, client) -> list:
+def handle_match_communication(raw_data: bytes, client: "Client") -> list:
     communication = MatchCommunication.from_network_message(raw_data)
     client.match.last_package = communication.turn_data
     client.match.player1_turn = not client.match.player1_turn
@@ -24,19 +26,15 @@ def handle_match_communication(raw_data: bytes, client) -> list:
     else:
         pass #TODO: add custom error
 
-def process_player1_turn(communication: 'MatchCommunication', client):
-    client.match.player1_energy = communication.player_energy
-    client.match.player1_package = True
+def process_player1_turn(communication: 'MatchCommunication', client: "Client"):
     if not client.match.first_turn:
         client.match.player2_energy = generate_energy(communication.enemy_energy_cont, client.match.player2_energy)
 
-def process_player2_turn(communication: 'MatchCommunication', client):
-    client.match.player2_energy = communication.player_energy
-    client.match.player1_package = False
+def process_player2_turn(communication: 'MatchCommunication', client: "Client"):
     if not client.match.first_turn:
         client.match.player1_energy = generate_energy(communication.enemy_energy_cont, client.match.player1_energy)
 
-def package_player2_message(communication: 'MatchCommunication', client) -> list:
+def package_player2_message(communication: 'MatchCommunication', client: "Client") -> list:
     buffer = ByteBuffer()
     buffer.write_int(1)
     for i in client.match.player2_energy:
@@ -47,7 +45,7 @@ def package_player2_message(communication: 'MatchCommunication', client) -> list
     return buffer.get_byte_array()
 
 
-def package_player1_message(communication: 'MatchCommunication', client) -> list:
+def package_player1_message(communication: 'MatchCommunication', client: "Client") -> list:
     buffer = ByteBuffer()
     buffer.write_int(1)
     for i in client.match.player1_energy:
@@ -81,17 +79,7 @@ class MatchCommunication:
     field name          type    size (bytes)
     ----------------------------------------
     Message Type        int     4
-    Physical Pool       int     4
-    Special Pool        int     4
-    Mental Pool         int     4
-    Weapon Pool         int     4
-    Enemy Phys Cont.    int     4
-    Enemy Spec Cont.    int     4
-    Enemy Ment Cont.    int     4
-    Enemy Wep Cont.     int     4
-    Enemy Rand Cont.    int     4
-    Turn Package Length int     4
-    Turn Package        bytes   variable (Turn Package Length)
+    
     Message Terminator          3
     """
 

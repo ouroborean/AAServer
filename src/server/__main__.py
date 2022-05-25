@@ -2,8 +2,6 @@ import asyncio
 import sys
 from server.data_handler import Server
 
-
-
 async def main():
 
     path = sys.argv[1]

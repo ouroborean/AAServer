@@ -18,4 +18,5 @@ class TurnTimer:
         await self._callback()
         
     def cancel(self):
+        print("Turn timer cancelled!")
         self._task.cancel()

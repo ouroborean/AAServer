@@ -22,7 +22,7 @@ class MatchManager():
         self.waiting_matches.clear()
 
     def end_match(self, matchID: str):
-        self.matches[matchID].turn_timer.cancel()
+        self.matches[matchID].end()
         self.matches.pop(matchID)
 
     def match_exists(self, matchID: str) -> bool:

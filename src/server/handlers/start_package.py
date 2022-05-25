@@ -27,6 +27,7 @@ def handle_start_package(raw_data: bytes, client, manager: "MatchManager") -> Op
 def get_player1_start_package(mID: str, manager: "MatchManager") -> list:
     buffer = ByteBuffer()
     buffer.write_int(0)
+    buffer.write_int(manager.matches[mID].random_seed)
     if manager.matches[mID].player1_first:
         buffer.write_int(1)
     else:
@@ -52,6 +53,7 @@ def get_player1_start_package(mID: str, manager: "MatchManager") -> list:
 def get_player2_start_package(mID: str, manager: "MatchManager") -> list:
     buffer = ByteBuffer()       
     buffer.write_int(0)
+    buffer.write_int(manager.matches[mID].random_seed)
     if manager.matches[mID].player1_first:
             buffer.write_int(0)
     else:

@@ -5,6 +5,7 @@ from server.player_status import PlayerStatus
 from server.turn_timer import TurnTimer
 import functools
 import random
+import time
 if TYPE_CHECKING:
     from server.handlers.start_package import StartPackage
 
@@ -18,6 +19,8 @@ class Match():
     player2_start_package: 'StartPackage'
     player1_energy_history: list
     player2_energy_history: list
+    player1_random_seeds: list
+    player2_random_seeds: list
     last_package: list
     match_id: list
     player1_turn: bool
@@ -27,6 +30,9 @@ class Match():
     turn_timer: TurnTimer
     message_received: bool
     timed_out: bool
+    random_seed: int
+    player1_won: bool
+    player2_won: bool
 
     def __init__(self, player1: Client, start_package: 'StartPackage'):
         self.player1 = player1
@@ -35,6 +41,10 @@ class Match():
         self.player1.match = self
         self.player1_energy_history = list()
         self.player2_energy_history = list()
+        self.player1_random_seeds = list()
+        self.player2_random_seeds = list()
+        self.player1_won = False
+        self.player2_won = False
         self.match_id = []
         self.last_package = []
         self.first_turn = 2
@@ -44,6 +54,35 @@ class Match():
         self.message_received = False
         self.timed_out = False
         self.turn_timer = None
+        
+    @property
+    def over(self) -> bool:
+        
+        return (self.player1.checked_out or client_db[self.player1.username] == PlayerStatus.DISCONNECTED) and (self.player2.checked_out or client_db[self.player2.username] == PlayerStatus.DISCONNECTED)
+    
+    @property
+    def player1_disconnected(self) -> bool:
+        return client_db[self.player1.username] == PlayerStatus.DISCONNECTED
+    
+    @property
+    def player2_disconnected(self) -> bool:
+        return client_db[self.player2.username] == PlayerStatus.DISCONNECTED
+    
+    def resolve_win_status(self, client: Client, won: bool):
+        if client == self.player1:
+            self.player1_won = won
+            self.player2_won = not won
+        else:
+            self.player2_won = won
+            self.player1_won = not won
+    
+    def end(self):
+        self.player1.reset()
+        self.player2.reset()
+        self.turn_timer.cancel()
+        print("Client database contains:")
+        for k, v in client_db.items():
+            print(f"{k}: {v.name}")
         
     def start_client_timer(self, client: Client, callback: Callable):
         if self.turn_timer:
@@ -58,7 +97,7 @@ class Match():
         self.player2.match = self
         self.match_id.append(player2.username)
         self.player2_start_package = start_package
-
+        self.random_seed = int(time.time())
         first_turn = random.randint(0,1)
         self.player1_first = not first_turn
         self.player1_turn = self.player1_first

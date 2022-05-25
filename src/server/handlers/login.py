@@ -25,6 +25,9 @@ def handle_login(raw_data: bytes, client, accounts: 'AccountManager') -> Tuple[b
             if stored.username in client_db and client_db[stored.username] == PlayerStatus.ONLINE:
                 return bundle_login_failure("Account currently logged in.")
             else:
+                print("Current Client Database on login:")
+                for k, v in client_db.items():
+                    print(f"{k}: {v.name}")
                 client.username = stored.username
                 reconnecting = (client.username in client_db and client_db[client.username] == PlayerStatus.DISCONNECTED)
                 client_db[client.username] = PlayerStatus.ONLINE
@@ -47,7 +50,7 @@ def get_player1_reconnection_info(client: Client) -> list:
     buffer = ByteBuffer()
     # Attach reconnection message tag
     buffer.write_int(6)
-
+    buffer.write_int(client.match.random_seed)
 
     # Encode reconnecting player's team/player information
     for name in client.match.player1_start_package.characters:
@@ -85,12 +88,13 @@ def get_player1_reconnection_info(client: Client) -> list:
 
     # Encode history of ability messages
     buffer.write_int(len(client.match.turn_history))
-
+    print(f"Client {client.username} reconnecting with {len(client.match.turn_history)} remembered turns.")
     for message in client.match.turn_history:
         buffer.write_bytes(message)
 
     # Encode history of player 1's energy gain pools
     buffer.write_int(len(client.match.player1_energy_history))
+    print(f"Client {client.username} reconnecting with {len(client.match.player1_energy_history)} remembered energy rolls.")
 
     for pool in client.match.player1_energy_history:
         for i in pool:
@@ -105,7 +109,7 @@ def get_player2_reconnection_info(client: Client) -> list:
     buffer = ByteBuffer()
     # Attach reconnection message tag
     buffer.write_int(6)
-
+    buffer.write_int(client.match.random_seed)
     # Encode reconnecting player's team/player information
     for name in client.match.player2_start_package.characters:
         buffer.write_string(name)
@@ -142,13 +146,13 @@ def get_player2_reconnection_info(client: Client) -> list:
 
     # Encode history of ability messages
     buffer.write_int(len(client.match.turn_history))
-
+    print(f"Client {client.username} reconnecting with {len(client.match.turn_history)} remembered turns.")
     for message in client.match.turn_history:
         buffer.write_bytes(message)
 
     # Encode history of player 2's energy gain pools
     buffer.write_int(len(client.match.player2_energy_history))
-
+    print(f"Client {client.username} reconnecting with {len(client.match.player2_energy_history)} remembered energy rolls.")
     for pool in client.match.player2_energy_history:
         for i in pool:
             buffer.write_int(i)

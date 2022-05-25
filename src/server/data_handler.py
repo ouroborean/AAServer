@@ -16,30 +16,8 @@ from server.client import client_db, Client
 
 SALT = b'gawr gura for president'
 
-class AbilityMessage:
 
-    user_id: int
-    ability_id: int
-    ally_targets: list[int]
-    enemy_targets: list[int]
-
-    def __init__(self):
-        self.ally_targets = list()
-        self.enemy_targets = list()
-    
-    def assign_user_id(self, user_id: int):
-            self.user_id = user_id
-
-    def assign_ability_id(self, ability_id: int):
-        self.ability_id = ability_id
-
-    def add_to_ally_targets(self, target_id: int):
-        self.ally_targets.append(target_id)
-    
-    def add_to_enemy_targets(self, target_id: int):
-        self.enemy_targets.append(target_id)
-
-VERSION = "0.9.8"
+VERSION = "0.9.943"
 
 class Server:
 
@@ -230,6 +208,26 @@ class Server:
                         f.writelines(str(line) + "\n")
         buffer.clear()
 
+    def handle_disconnected_player_update(self, client: Client, win: bool = False):
+        player_info = ByteBuffer()
+        player_info.write_bytes(login.get_player_info(self.accounts.get(client.username)))
+        player_info.read_int()
+        wins = player_info.read_int()
+        losses = player_info.read_int()
+        medals = player_info.read_int()
+        mission_data = player_info.read_string()
+        if win:
+            wins += 1
+        else:
+            losses += 1
+        #TODO Add streak handling
+        
+        print(f"Updating {client.username} to W: {wins} / L: {losses}")
+        
+        data = f"{wins}/{losses}/{medals}|{mission_data}"
+        self.accounts.update_data(client.username, data)
+        
+        
 
     def handle_player_update(self, data: list, client: Client):
         buffer = ByteBuffer()
@@ -273,11 +271,12 @@ class Server:
             
 
     def handle_surrender(self, data: list, client: Client):
-            if client == client.match.player1:
-                self.send_surrender_notification(client.match.player2, data)
-            elif client == client.match.player2:
-                self.send_surrender_notification(client.match.player1, data)
-            self.handle_match_ending([], client)
+        if client == client.match.player1:
+            client.match.player2_won = True
+            self.send_surrender_notification(client.match.player2, data)
+        elif client == client.match.player2:
+            client.match.player1_won = True
+            self.send_surrender_notification(client.match.player1, data)
 
     def send_surrender_notification(self, client: Client, data: bytes):
 
@@ -304,49 +303,54 @@ class Server:
         buffer.clear()
 
     def send_empty_turn(self, client: Client):
-    
-        client.match.player1_turn = not client.match.player1_turn
-        client.match.timed_out = False
-        client.match.first_turn -= 1
-        if client.match.first_turn < 0:
-            client.match.first_turn = 0
-        
-        buffer = ByteBuffer()
-        buffer.write_int(1)
-        buffer.write_int(0)
-        for i in range(4):
-            buffer.write_int(0)
-        client.match.turn_history.append(buffer.get_byte_array()[4:])
-        energy_pool = list()
-        if not client.match.first_turn:
-            min_roll = 0
-            max_roll = 3
-        else:
-            min_roll = 5
-            max_roll = 5
-        for i in range(6):
-            random_energy = random.randint(min_roll, max_roll)
+        if client.match.timed_out:
+            client.match.player1_turn = not client.match.player1_turn
+            client.match.timed_out = False
+            client.match.first_turn -= 1
+            if client.match.first_turn < 0:
+                client.match.first_turn = 0
             
-            energy_pool.append(random_energy)
-            buffer.write_int(random_energy)
-        buffer.write_byte(b'\x1f\x1f\x1f')
-        
-        if client == client.match.player1:
-            client.match.player1_energy_history.append(energy_pool)
-            client.match.player1.connection.write(buffer.get_byte_array())
-            client.match.start_client_timer(client.match.player1, self.handle_timeout)
-        elif client == client.match.player2:
-            client.match.player2_energy_history.append(energy_pool)
-            client.match.player2.connection.write(buffer.get_byte_array())
-            client.match.start_client_timer(client.match.player2, self.handle_timeout)
-        else:
-            pass #TODO: add custom error
-        buffer.clear()
-        
+            buffer = ByteBuffer()
+            buffer.write_int(1)
+            buffer.write_int(0)
+            for i in range(4):
+                buffer.write_int(0)
+            client.match.turn_history.append(buffer.get_byte_array()[4:])
+            
+            
+            
+            energy_pool = list()
+            if not client.match.first_turn:
+                min_roll = 0
+                max_roll = 3
+            else:
+                min_roll = 5
+                max_roll = 5
+            for i in range(6):
+                random_energy = random.randint(min_roll, max_roll)
+                
+                energy_pool.append(random_energy)
+                buffer.write_int(random_energy)
+            buffer.write_byte(b'\x1f\x1f\x1f')
+            
+            if client == client.match.player1:
+                client.match.player1_energy_history.append(energy_pool)
+                client.match.start_client_timer(client.match.player1, self.handle_timeout)
+                client.match.player1.connection.write(buffer.get_byte_array())
+                
+            elif client == client.match.player2:
+                client.match.player2_energy_history.append(energy_pool)
+                client.match.start_client_timer(client.match.player2, self.handle_timeout)
+                client.match.player2.connection.write(buffer.get_byte_array())
+                
+            else:
+                pass #TODO: add custom error
+            buffer.clear()
+            
 
     def handle_match_communication(self, data: list, client: Client):
 
-
+        print(f"Match communication received from {client.username}")
         buffer = ByteBuffer()
         buffer.write_bytes(data)
         if not client.match.timed_out:
@@ -385,7 +389,21 @@ class Server:
             buffer.clear()
 
     def handle_match_ending(self, data: list, client: Client):
-        self.matches.end_match(client.match.get_match_id())
+        buffer = ByteBuffer()
+        buffer.write_bytes(data)
+        buffer.read_int()
+        client_won = buffer.read_int()
+        buffer.clear()
+        
+        client.match.resolve_win_status(client, client_won)
+        
+        client.check_out()
+        if client.match.over:
+            if client.match.player1_disconnected:
+                self.handle_disconnected_player_update(client.match.player1, client.match.player1_won)
+            if client.match.player2_disconnected:
+                self.handle_disconnected_player_update(client.match.player2, client.match.player2_won)
+            self.matches.end_match(client.match.get_match_id())
 
     def handle_search_cancellation(self, data: list, client: Client):
         self.matches.clear_matches()

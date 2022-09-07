@@ -1,4 +1,5 @@
 from server.match import Match
+import logging
 
 class MatchManager():
 
@@ -10,6 +11,7 @@ class MatchManager():
         self.waiting_matches = list()
 
     def create_open_match(self, client, start_package):
+        logging.debug("Created new open match!")
         self.waiting_matches.append(Match(client, start_package))
         
     def send_player1_message(self, matchID: str, message: list[bytes]):

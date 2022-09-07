@@ -6,6 +6,7 @@ from server.turn_timer import TurnTimer
 import functools
 import random
 import time
+import logging
 if TYPE_CHECKING:
     from server.handlers.start_package import StartPackage
 
@@ -54,11 +55,15 @@ class Match():
         self.message_received = False
         self.timed_out = False
         self.turn_timer = None
+        self.player1_first = False
         
     @property
     def over(self) -> bool:
         
-        return (self.player1.checked_out or client_db[self.player1.username] == PlayerStatus.DISCONNECTED) and (self.player2.checked_out or client_db[self.player2.username] == PlayerStatus.DISCONNECTED)
+        player_1_finished = (self.player1.checked_out or client_db[self.player1.username] == PlayerStatus.DISCONNECTED or client_db[self.player1.username] == PlayerStatus.OFFLINE)
+        player_2_finished = (self.player2.checked_out or client_db[self.player2.username] == PlayerStatus.DISCONNECTED or client_db[self.player2.username] == PlayerStatus.OFFLINE)
+        
+        return (player_1_finished and player_2_finished)
     
     @property
     def player1_disconnected(self) -> bool:
@@ -80,7 +85,6 @@ class Match():
         self.player1.reset()
         self.player2.reset()
         self.turn_timer.cancel()
-        print("Client database contains:")
         for k, v in client_db.items():
             print(f"{k}: {v.name}")
         
@@ -112,10 +116,14 @@ class Match():
             self.player1 = player
             player.match = self
             client_db[player.username] = PlayerStatus.ONLINE
+            logging.debug("%s rejoined the match!", player.username)
+            logging.debug("Match player-states: Player 1 - %s | Player 2 - %s", self.player1.username, self.player2.username)
         elif player.username == self.player2.username:
             self.player2 = player
             player.match = self
             client_db[player.username] = PlayerStatus.ONLINE
+            logging.debug("%s rejoined the match!", player.username)
+            logging.debug("Match player-states: Player 1 - %s | Player 2 - %s", self.player1.username, self.player2.username)
 
 
     def get_match_id(self):

@@ -75,8 +75,6 @@ class Server:
             if client.match:
                 if client == client.match.player1 and self.matches.match_exists(client.match.get_match_id()):
                     if client_db[client.match.player2.username] == PlayerStatus.DISCONNECTED:
-                        self.add_a_loss(client)
-                        self.add_a_loss(client.match.player2)
                         client_db[client.match.player2.username] = PlayerStatus.OFFLINE
                         client_db[client.username] = PlayerStatus.OFFLINE
                         self.handle_match_ending([], client)
@@ -84,8 +82,6 @@ class Server:
                         client_db[client.username] = PlayerStatus.DISCONNECTED
                 elif client.match.player2 and client == client.match.player2 and self.matches.match_exists(client.match.get_match_id()):
                     if client_db[client.match.player1.username] == PlayerStatus.DISCONNECTED:
-                        self.add_a_loss(client)
-                        self.add_a_loss(client.match.player1)
                         client_db[client.match.player1.username] = PlayerStatus.OFFLINE
                         client_db[client.username] = PlayerStatus.OFFLINE
                         self.handle_match_ending([], client)
@@ -267,7 +263,10 @@ class Server:
             p2_message = start_package_response[2]
             self.matches.send_player1_message(mID, p1_message)
             self.matches.send_player2_message(mID, p2_message)
-            client.match.start_client_timer(client, self.handle_timeout)
+            
+            first_player = client.match.player1 if client.match.player1_first else client.match.player2
+            
+            client.match.start_client_timer(first_player, self.handle_timeout)
             
 
     def handle_surrender(self, data: list, client: Client):
@@ -396,7 +395,6 @@ class Server:
         buffer.clear()
         
         client.match.resolve_win_status(client, client_won)
-        
         client.check_out()
         if client.match.over:
             if client.match.player1_disconnected:

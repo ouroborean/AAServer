@@ -6,6 +6,7 @@ from server.byte_buffer import ByteBuffer
 from server.client import client_db, Client
 from server.player_status import PlayerStatus
 from server.handlers.register import characters
+import logging
 if TYPE_CHECKING:
     from server.managers.accounts import AccountManager, AccountRecord
     from server.managers.matches import MatchManager
@@ -40,10 +41,13 @@ def handle_login(raw_data: bytes, client, accounts: 'AccountManager') -> Tuple[b
 def handle_reconnection(client, match_manager: "MatchManager") -> list:
     for match in match_manager.matches.values():
         if match.match_id[0] == client.username or match.match_id[1] == client.username:
+            logging.debug("Client found in match!")
             match.rejoin_match(client)
     if client == client.match.player1:
+        logging.debug("%s reconnecting as player 1", client.username)
         return get_player1_reconnection_info(client)
     elif client == client.match.player2:
+        logging.debug("%s reconnecting as player 2", client.username)
         return get_player2_reconnection_info(client)
 
 def get_player1_reconnection_info(client: Client) -> list:

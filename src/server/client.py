@@ -1,15 +1,15 @@
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Union
 from server.player_status import PlayerStatus
 
 if TYPE_CHECKING:
-    from server.match import Match
+    from server.match import QuickMatch, RankedMatch
 
 
 client_db = {}
 
 class Client():
     
-    match: "Match"
+    match: Union["QuickMatch", "RankedMatch"]
     checked_out: bool
     status: PlayerStatus
 

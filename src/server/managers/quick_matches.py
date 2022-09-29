@@ -1,18 +1,18 @@
-from server.match import Match
+from server.match import QuickMatch
 import logging
 
-class MatchManager():
+class QuickMatchManager():
 
-    matches: dict[str, Match] = dict()
-    waiting_matches: list[Match] = list()
+    matches: dict[str, QuickMatch] = dict()
+    waiting_matches: list[QuickMatch] = list()
 
     def __init__(self):
         self.matches = dict()
         self.waiting_matches = list()
 
     def create_open_match(self, client, start_package):
-        logging.debug("Created new open match!")
-        self.waiting_matches.append(Match(client, start_package))
+        logging.debug("Created new open quick match!")
+        self.waiting_matches.append(QuickMatch(client, start_package))
         
     def send_player1_message(self, matchID: str, message: list[bytes]):
         self.matches[matchID].player1.connection.write(message)

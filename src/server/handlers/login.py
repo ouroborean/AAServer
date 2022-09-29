@@ -9,7 +9,7 @@ from server.handlers.register import characters
 import logging
 if TYPE_CHECKING:
     from server.managers.accounts import AccountManager, AccountRecord
-    from server.managers.matches import MatchManager
+    from server.managers.quick_matches import QuickMatchManager
 
 SALT = b'gawr gura for president'
 
@@ -38,7 +38,7 @@ def handle_login(raw_data: bytes, client, accounts: 'AccountManager') -> Tuple[b
     else:
         return bundle_login_failure("No account with matching credentials found.")
 
-def handle_reconnection(client, match_manager: "MatchManager") -> list:
+def handle_reconnection(client, match_manager: "QuickMatchManager") -> list:
     for match in match_manager.matches.values():
         if match.match_id[0] == client.username or match.match_id[1] == client.username:
             logging.debug("Client found in match!")

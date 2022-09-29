@@ -5,15 +5,15 @@ from server.byte_buffer import ByteBuffer
 from typing import Optional, Tuple
 if TYPE_CHECKING:
     from server.managers.accounts import AccountManager, AccountRecord
-    from server.managers.matches import MatchManager
+    from server.managers.ranked_matches import RankedMatchManager
 
 INT_SIZE = 4
 MAX_USERNAME_SIZE = 420
 MAX_PASSWORD_SIZE = 420
 
-def handle_start_package(raw_data: bytes, client, manager: "MatchManager") -> Optional[Tuple[str, list, list]]:
+def handle_start_package(raw_data: bytes, client, manager: "RankedMatchManager") -> Optional[Tuple[str, list, list]]:
 
-    package = StartPackage.from_network_message(raw_data)
+    package = RankedStartPackage.from_network_message(raw_data)
     
     if len(manager.waiting_matches) == 0:
         manager.create_open_match(client, package)
@@ -24,18 +24,15 @@ def handle_start_package(raw_data: bytes, client, manager: "MatchManager") -> Op
         p2_message = get_player2_start_package(mID, manager)
         return [mID, p1_message, p2_message]
 
-def get_player1_start_package(mID: str, manager: "MatchManager") -> list:
+def get_player1_start_package(mID: str, manager: "RankedMatchManager") -> list:
     buffer = ByteBuffer()
-    buffer.write_int(0)
-    buffer.write_int(manager.matches[mID].random_seed)
+    buffer.write_int(10)
+    
     if manager.matches[mID].player1_first:
         buffer.write_int(1)
     else:
         buffer.write_int(0)
-    for i in manager.matches[mID].player1_energy_history[0]:
-        buffer.write_int(i)
-    for character in manager.matches[mID].player2_start_package.characters:
-        buffer.write_string(character)
+    
     package = manager.matches[mID].player2_start_package.player_package
 
     buffer.write_string(package[0])
@@ -50,18 +47,14 @@ def get_player1_start_package(mID: str, manager: "MatchManager") -> list:
     buffer.write_byte(b'\x1f\x1f\x1f')
     return buffer.get_byte_array()
 
-def get_player2_start_package(mID: str, manager: "MatchManager") -> list:
+def get_player2_start_package(mID: str, manager: "RankedMatchManager") -> list:
     buffer = ByteBuffer()       
-    buffer.write_int(0)
-    buffer.write_int(manager.matches[mID].random_seed)
+    buffer.write_int(10)
     if manager.matches[mID].player1_first:
             buffer.write_int(0)
     else:
         buffer.write_int(1)
-    for i in manager.matches[mID].player2_energy_history[0]:
-        buffer.write_int(i)
-    for character in manager.matches[mID].player1_start_package.characters:
-        buffer.write_string(character)
+    
     package = manager.matches[mID].player1_start_package.player_package
 
     buffer.write_string(package[0])
@@ -77,8 +70,8 @@ def get_player2_start_package(mID: str, manager: "MatchManager") -> list:
 
 
 @dataclass
-class StartPackage:
-    """A message containing a player's match starting package.
+class RankedStartPackage:
+    """A message containing a player's ranked match starting package.
 
     The wire encoding of this message is:
 
@@ -89,23 +82,16 @@ class StartPackage:
     Player Package          bytes   variable (Player Package Length)
     Message Terminator              3
     """
-    characters: list
     player_package: list
 
     @classmethod
-    def from_network_message(cls: 'Type[StartPackage]',
-                             msg_payload: bytes) -> 'StartPackage':
+    def from_network_message(cls: 'Type[RankedStartPackage]',
+                             msg_payload: bytes) -> 'RankedStartPackage':
         raw_message = io.BytesIO(msg_payload)
         msg_type = int.from_bytes(raw_message.read(INT_SIZE), 'big')
 
-        assert msg_type == 0, "Invalid message tag!"
-        characters = []
-        for _ in range(3):
-            character_len_raw = raw_message.read(INT_SIZE)
-            character_len = int.from_bytes(character_len_raw, byteorder='big')
-            character_raw = raw_message.read(character_len)
-            character = str(character_raw, encoding = 'utf-8')
-            characters.append(character)
+        assert msg_type == 12, "Invalid message tag!"
+        
         player_package = list()
 
         player_name_len_raw = raw_message.read(INT_SIZE)
@@ -139,4 +125,4 @@ class StartPackage:
 
         player_package = [player_name, player_wins, player_losses, player_image_mode, player_image_width, player_image_height, player_image_bytes]
 
-        return cls(characters, player_package)
+        return cls(player_package)

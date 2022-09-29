@@ -1,6 +1,6 @@
 
 from server.byte_buffer import ByteBuffer
-from server.managers.matches import MatchManager
+from server.managers.quick_matches import QuickMatchManager
 from server.managers.accounts import AccountManager
 from pathlib import Path
 import dill as pickle
@@ -8,11 +8,14 @@ from functools import partial
 import os
 import random
 from typing import TYPE_CHECKING, Callable
-from server.handlers import login, register, start_package
+from server.handlers import login, qm_start_package, ranked_start_package, register
 import asyncio
 import time
+from server.managers.ranked_matches import RankedMatchManager
+from server.match import RankedMatch, QuickMatch
 from server.player_status import PlayerStatus
 from server.client import client_db, Client
+import logging
 
 SALT = b'gawr gura for president'
 
@@ -22,11 +25,13 @@ VERSION = "0.9.943"
 class Server:
 
     accounts: AccountManager
-    matches: MatchManager
+    q_matches: QuickMatchManager
+    r_matches: RankedMatchManager
     packets: dict[int, Callable]
 
     def __init__(self, data_dir: Path):
-        self.matches = MatchManager()
+        self.q_matches = QuickMatchManager()
+        self.r_matches = RankedMatchManager()
         self.accounts = AccountManager(Path(data_dir))
 
         self.packets = {
@@ -41,7 +46,10 @@ class Server:
             8: self.handle_match_ending,
             9: self.process_match_stats,
             10: self.handle_version_check,
-            11: self.handle_nonce_request
+            11: self.handle_nonce_request,
+            12: self.handle_ranked_start_package,
+            13: self.handle_draft_message,
+            14: self.handle_draft_finalization
         }
 
     
@@ -73,14 +81,14 @@ class Server:
         if client.username != "":
             print(f"Player {client.username} disconnected from server.")
             if client.match:
-                if client == client.match.player1 and self.matches.match_exists(client.match.get_match_id()):
+                if client == client.match.player1 and self.q_matches.match_exists(client.match.get_match_id()):
                     if client_db[client.match.player2.username] == PlayerStatus.DISCONNECTED:
                         client_db[client.match.player2.username] = PlayerStatus.OFFLINE
                         client_db[client.username] = PlayerStatus.OFFLINE
                         self.handle_match_ending([], client)
                     else:
                         client_db[client.username] = PlayerStatus.DISCONNECTED
-                elif client.match.player2 and client == client.match.player2 and self.matches.match_exists(client.match.get_match_id()):
+                elif client.match.player2 and client == client.match.player2 and self.q_matches.match_exists(client.match.get_match_id()):
                     if client_db[client.match.player1.username] == PlayerStatus.DISCONNECTED:
                         client_db[client.match.player1.username] = PlayerStatus.OFFLINE
                         client_db[client.username] = PlayerStatus.OFFLINE
@@ -91,9 +99,9 @@ class Server:
                     client_db[client.username] = PlayerStatus.OFFLINE
             else:
                 client_db.pop(client.username)
-            for match in self.matches.waiting_matches:
+            for match in self.q_matches.waiting_matches:
                 if match.player1 == client:
-                    self.matches.clear_matches()
+                    self.q_matches.clear_matches()
             
                     
 
@@ -105,6 +113,32 @@ class Server:
         buffer.write_byte(b'\x1f\x1f\x1f')
         client.nonce = nonce
         client.connection.write(buffer.get_byte_array())
+    
+    def handle_draft_finalization(self, data: list, client: Client):
+        buffer = ByteBuffer()
+        buffer.write_bytes(data)
+        buffer.read_int()
+        characters = list()
+        for i in range(3):
+            characters.append(buffer.read_string())
+            
+                
+        
+        buffer.clear()
+        buffer.write_int(12)
+        buffer.write_int(client.match.random_seed)
+        if client == client.match.player1:
+            client.match.player1_characters = characters
+            for i in client.match.player1_energy_history[0]:
+                buffer.write_int(i)
+            buffer.write_byte(b'\x1f\x1f\x1f')
+            client.connection.write(buffer.get_byte_array())
+        elif client == client.match.player2:
+            client.match.player2_characters = characters
+            for i in client.match.player2_energy_history[0]:
+                buffer.write_int(i)
+            buffer.write_byte(b'\x1f\x1f\x1f')
+            client.connection.write(buffer.get_byte_array())
         
 
     def send_timeout(self, client: Client):
@@ -148,7 +182,7 @@ class Server:
 
         # Handle reconnection if the client is shown as having disconnected from a game
         if reconnecting:
-            client.connection.write(login.handle_reconnection(client, self.matches))
+            client.connection.write(login.handle_reconnection(client, self.q_matches))
 
     def handle_avatar_update(self, data:list, client: Client):
         buffer = ByteBuffer()
@@ -257,17 +291,31 @@ class Server:
         self.accounts.update_data(client.username, write_data)
 
     def handle_start_package(self, data: list, client: Client):
-        if start_package_response := start_package.handle_start_package(bytes(data), client, self.matches):
+        if start_package_response := qm_start_package.handle_start_package(bytes(data), client, self.q_matches):
             mID = start_package_response[0]
             p1_message = start_package_response[1]
             p2_message = start_package_response[2]
-            self.matches.send_player1_message(mID, p1_message)
-            self.matches.send_player2_message(mID, p2_message)
+            self.q_matches.send_player1_message(mID, p1_message)
+            self.q_matches.send_player2_message(mID, p2_message)
             
             first_player = client.match.player1 if client.match.player1_first else client.match.player2
             
             client.match.start_client_timer(first_player, self.handle_timeout)
+
+    def handle_ranked_start_package(self, data: list, client: Client):
+        if start_package_response := ranked_start_package.handle_start_package(bytes(data), client, self.r_matches):
+            mID = start_package_response[0]
+            p1_message = start_package_response[1]
+            p2_message = start_package_response[2]
+            self.r_matches.send_player1_message(mID, p1_message)
+            self.r_matches.send_player2_message(mID, p2_message)
             
+            first_player = client.match.player1 if client.match.player1_first else client.match.player2
+            
+            client.match.start_client_timer(first_player, self.handle_draft_timeout)
+    
+    def handle_draft_timeout(self, client):
+        logging.debug("%s timed out on their draft turn! TODO: PUNISH THEM", client.username)
 
     def handle_surrender(self, data: list, client: Client):
         if client == client.match.player1:
@@ -276,6 +324,28 @@ class Server:
         elif client == client.match.player2:
             client.match.player1_won = True
             self.send_surrender_notification(client.match.player1, data)
+
+    def handle_draft_message(self, data: list, client: Client):
+        
+        in_buffer = ByteBuffer()
+        in_buffer.write_bytes(data)
+        in_buffer.read_int()
+        character = in_buffer.read_string()
+        
+        out_buffer = ByteBuffer()
+        out_buffer.write_int(11)
+        out_buffer.write_string(character)
+        out_buffer.write_byte(b'\x1f\x1f\x1f')
+        
+        
+        if client == client.match.player1:
+            client.match.player2.connection.write(out_buffer.get_byte_array())
+            client.match.start_client_timer(client.match.player1, self.handle_draft_timeout)
+        elif client == client.match.player2:
+            client.match.player1.connection.write(out_buffer.get_byte_array())
+            client.match.start_client_timer(client.match.player2, self.handle_draft_timeout)
+            
+        
 
     def send_surrender_notification(self, client: Client, data: bytes):
 
@@ -401,7 +471,10 @@ class Server:
                 self.handle_disconnected_player_update(client.match.player1, client.match.player1_won)
             if client.match.player2_disconnected:
                 self.handle_disconnected_player_update(client.match.player2, client.match.player2_won)
-            self.matches.end_match(client.match.get_match_id())
+            if type(client.match) == QuickMatch:
+                self.q_matches.end_match(client.match.get_match_id())
+            elif type(client.match) == RankedMatch:
+                self.r_matches.end_match(client.match.get_match_id())
 
     def handle_search_cancellation(self, data: list, client: Client):
-        self.matches.clear_matches()
+        self.q_matches.clear_matches()

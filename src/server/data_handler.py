@@ -81,14 +81,14 @@ class Server:
         if client.username != "":
             print(f"Player {client.username} disconnected from server.")
             if client.match:
-                if client == client.match.player1 and self.q_matches.match_exists(client.match.get_match_id()):
+                if client == client.match.player1 and (self.q_matches.match_exists(client.match.get_match_id()) or self.r_matches.match_exists(client.match.get_match_id())):
                     if client_db[client.match.player2.username] == PlayerStatus.DISCONNECTED:
                         client_db[client.match.player2.username] = PlayerStatus.OFFLINE
                         client_db[client.username] = PlayerStatus.OFFLINE
                         self.handle_match_ending([], client)
                     else:
                         client_db[client.username] = PlayerStatus.DISCONNECTED
-                elif client.match.player2 and client == client.match.player2 and self.q_matches.match_exists(client.match.get_match_id()):
+                elif client.match.player2 and client == client.match.player2 and (self.q_matches.match_exists(client.match.get_match_id()) or self.r_matches.match_exists(client.match.get_match_id())):
                     if client_db[client.match.player1.username] == PlayerStatus.DISCONNECTED:
                         client_db[client.match.player1.username] = PlayerStatus.OFFLINE
                         client_db[client.username] = PlayerStatus.OFFLINE

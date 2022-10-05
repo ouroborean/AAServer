@@ -13,6 +13,7 @@ async def main():
 
     
     echo_server = await asyncio.start_server(server.handle_echo, port=5692)
+    
     async with echo_server:
         await echo_server.serve_forever()
 

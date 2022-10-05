@@ -183,4 +183,6 @@ characters = ["naruto",
               "touka",
               "killua",
               "sheele",
-              "byakuya"]
+              "byakuya",
+              "rikka",
+              "anya"]

@@ -28,7 +28,8 @@ class Server:
     q_matches: QuickMatchManager
     r_matches: RankedMatchManager
     packets: dict[int, Callable]
-
+    
+    
     def __init__(self, data_dir: Path):
         self.q_matches = QuickMatchManager()
         self.r_matches = RankedMatchManager()
@@ -52,9 +53,10 @@ class Server:
             14: self.handle_draft_finalization
         }
 
-    
+    def assign_server(self, server):
+        self.server = server
 
-    async def handle_echo(self, reader: asyncio.StreamReader, writer):
+    async def handle_echo(self, reader: asyncio.StreamReader, writer, transport):
         print("Client connected!")
         client = Client(writer, writer.get_extra_info('peername')[0], writer.get_extra_info('peername')[1])
         buffer = ByteBuffer()
@@ -102,7 +104,10 @@ class Server:
             for match in self.q_matches.waiting_matches:
                 if match.player1 == client:
                     self.q_matches.clear_matches()
-            
+            for match in self.r_matches.waiting_matches:
+                if match.player1 == client:
+                    self.r_matches.clear_matches()
+        transport.close()
                     
 
     def handle_nonce_request(self, data: list, client: Client):
@@ -418,7 +423,12 @@ class Server:
             
 
     def handle_match_communication(self, data: list, client: Client):
-
+        
+        if type(client.match) == RankedMatch:
+            timeout = self.handle_draft_timeout
+        else:
+            timeout = self.handle_timeout
+        
         print(f"Match communication received from {client.username}")
         buffer = ByteBuffer()
         buffer.write_bytes(data)
@@ -447,11 +457,11 @@ class Server:
             if client == client.match.player1:
                 client.match.player2_energy_history.append(energy_pool)
                 client.match.player2.connection.write(buffer.get_byte_array())
-                client.match.start_client_timer(client.match.player2, self.handle_timeout)
+                client.match.start_client_timer(client.match.player2, timeout)
             elif client == client.match.player2:
                 client.match.player1_energy_history.append(energy_pool)
                 client.match.player1.connection.write(buffer.get_byte_array())
-                client.match.start_client_timer(client.match.player1, self.handle_timeout)
+                client.match.start_client_timer(client.match.player1, timeout)
             else:
                 pass #TODO: add custom error
             

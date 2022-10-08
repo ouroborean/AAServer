@@ -56,7 +56,7 @@ class Server:
     def assign_server(self, server):
         self.server = server
 
-    async def handle_echo(self, reader: asyncio.StreamReader, writer, transport):
+    async def handle_echo(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
         print("Client connected!")
         client = Client(writer, writer.get_extra_info('peername')[0], writer.get_extra_info('peername')[1])
         buffer = ByteBuffer()
@@ -107,7 +107,7 @@ class Server:
             for match in self.r_matches.waiting_matches:
                 if match.player1 == client:
                     self.r_matches.clear_matches()
-        transport.close()
+        writer.close()
                     
 
     def handle_nonce_request(self, data: list, client: Client):

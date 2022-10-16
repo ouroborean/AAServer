@@ -32,6 +32,7 @@ class RankedMatchManager():
 
     def close_match(self, client, start_package) -> str:
         match = self.waiting_matches[0]
+        match.drafting = True
         match.finish_forming_match(client, start_package)
         self.waiting_matches.clear()
         mID = match.get_match_id()

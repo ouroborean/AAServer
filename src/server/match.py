@@ -157,12 +157,14 @@ class RankedMatch():
     random_seed: int
     player1_won: bool
     player2_won: bool
+    drafting: bool
 
     def __init__(self, player1: Client, start_package: 'RankedStartPackage'):
         self.player1 = player1
         self.player2 = None
         self.player1_turn = True
         self.player1.match = self
+        self.drafting = False
         self.player1_energy_history = list()
         self.player2_energy_history = list()
         self.player1_random_seeds = list()

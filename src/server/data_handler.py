@@ -83,21 +83,45 @@ class Server:
         if client.username != "":
             print(f"Player {client.username} disconnected from server.")
             if client.match:
-                if client == client.match.player1 and (self.q_matches.match_exists(client.match.get_match_id()) or self.r_matches.match_exists(client.match.get_match_id())):
-                    if client_db[client.match.player2.username] == PlayerStatus.DISCONNECTED:
-                        client_db[client.match.player2.username] = PlayerStatus.OFFLINE
-                        client_db[client.username] = PlayerStatus.OFFLINE
-                        self.handle_match_ending([], client)
-                    else:
-                        client_db[client.username] = PlayerStatus.DISCONNECTED
-                elif client.match.player2 and client == client.match.player2 and (self.q_matches.match_exists(client.match.get_match_id()) or self.r_matches.match_exists(client.match.get_match_id())):
-                    if client_db[client.match.player1.username] == PlayerStatus.DISCONNECTED:
-                        client_db[client.match.player1.username] = PlayerStatus.OFFLINE
-                        client_db[client.username] = PlayerStatus.OFFLINE
-                        self.handle_match_ending([], client)
-                    else:
-                        client_db[client.username] = PlayerStatus.DISCONNECTED
-                else: 
+                if client == client.match.player1:
+                    if self.q_matches.match_exists(client.match.get_match_id()):
+                        if client_db[client.match.player2.username] == PlayerStatus.DISCONNECTED:
+                            client_db[client.match.player2.username] = PlayerStatus.OFFLINE
+                            client_db[client.username] = PlayerStatus.OFFLINE
+                            self.handle_match_ending([], client)
+                        else:
+                            client_db[client.username] = PlayerStatus.DISCONNECTED
+                    elif self.r_matches.match_exists(client.match.get_match_id()):
+                        if client.match.drafting:
+                            self.send_draft_disconnection(client.match.player2)
+                            self.r_matches.end_match(client.match.get_match_id())
+                        else:
+                            if client_db[client.match.player2.username] == PlayerStatus.DISCONNECTED:
+                                client_db[client.match.player2.username] = PlayerStatus.OFFLINE
+                                client_db[client.username] = PlayerStatus.OFFLINE
+                                self.handle_match_ending([], client)
+                            else:
+                                client_db[client.username] = PlayerStatus.DISCONNECTED
+                elif client.match.player2 and client == client.match.player2:
+                    if self.q_matches.match_exists(client.match.get_match_id()):
+                        if client_db[client.match.player1.username] == PlayerStatus.DISCONNECTED:
+                            client_db[client.match.player1.username] = PlayerStatus.OFFLINE
+                            client_db[client.username] = PlayerStatus.OFFLINE
+                            self.handle_match_ending([], client)
+                        else:
+                            client_db[client.username] = PlayerStatus.DISCONNECTED
+                    elif self.r_matches.match_exists(client.match.get_match_id()):
+                        if client.match.drafting:
+                            self.send_draft_disconnection(client.match.player1)
+                            self.r_matches.end_match(client.match.get_match_id())
+                        else:
+                            if client_db[client.match.player1.username] == PlayerStatus.DISCONNECTED:
+                                client_db[client.match.player1.username] = PlayerStatus.OFFLINE
+                                client_db[client.username] = PlayerStatus.OFFLINE
+                                self.handle_match_ending([], client)
+                            else:
+                                client_db[client.username] = PlayerStatus.DISCONNECTED
+                else:
                     client_db[client.username] = PlayerStatus.OFFLINE
             else:
                 client_db.pop(client.username)
@@ -126,9 +150,7 @@ class Server:
         characters = list()
         for i in range(3):
             characters.append(buffer.read_string())
-            
-                
-        
+        client.match.drafting = False
         buffer.clear()
         buffer.write_int(12)
         buffer.write_int(client.match.random_seed)
@@ -144,13 +166,28 @@ class Server:
                 buffer.write_int(i)
             buffer.write_byte(b'\x1f\x1f\x1f')
             client.connection.write(buffer.get_byte_array())
-        
+    
+    def send_draft_disconnection(self, client: Client):
+        buffer = ByteBuffer()
+        buffer.write_int(14)
+        buffer.write_byte(b'\x1f\x1f\x1f')
+        client.connection.write(buffer.get_byte_array())
+        buffer.clear()
 
     def send_timeout(self, client: Client):
         buffer = ByteBuffer()
         buffer.write_int(8)
         buffer.write_byte(b'\x1f\x1f\x1f')
         client.connection.write(buffer.get_byte_array())
+        buffer.clear()
+        
+    def handle_draft_timeout(self, client):
+        buffer = ByteBuffer()
+        print()
+        buffer.write_int(13)
+        buffer.write_byte(b'\x1f\x1f\x1f')
+        client.match.player1.connection.write(buffer.get_byte_array())
+        client.match.player2.connection.write(buffer.get_byte_array())
         buffer.clear()
 
     async def handle_timeout(self, client: Client):
@@ -319,8 +356,7 @@ class Server:
             
             client.match.start_client_timer(first_player, self.handle_draft_timeout)
     
-    def handle_draft_timeout(self, client):
-        logging.debug("%s timed out on their draft turn! TODO: PUNISH THEM", client.username)
+    
 
     def handle_surrender(self, data: list, client: Client):
         if client == client.match.player1:
@@ -386,10 +422,15 @@ class Server:
             
             buffer = ByteBuffer()
             buffer.write_int(1)
+            # timeout flag
+            buffer.write_int(1)
+            # ability message length            
+            buffer.write_int(0)
+            # execution order length
             buffer.write_int(0)
             for i in range(4):
                 buffer.write_int(0)
-            client.match.turn_history.append(buffer.get_byte_array()[4:])
+            client.match.turn_history.append(buffer.get_byte_array()[8:])
             
             
             
@@ -434,7 +475,7 @@ class Server:
         buffer.write_bytes(data)
         if not client.match.timed_out:
             client.match.message_received = True
-            client.match.turn_history.append(data[4:])
+            client.match.turn_history.append(data[8:])
             client.match.player1_turn = not client.match.player1_turn
             client.match.first_turn -= 1
             if client.match.first_turn < 0:

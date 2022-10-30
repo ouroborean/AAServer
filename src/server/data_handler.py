@@ -20,7 +20,7 @@ import logging
 SALT = b'gawr gura for president'
 
 
-VERSION = "0.9.943"
+VERSION = "0.9.95"
 
 class Server:
 

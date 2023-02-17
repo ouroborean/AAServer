@@ -21,10 +21,21 @@ class Client():
         self.nonce = 0
         self.checked_out = False
         self.status = PlayerStatus.ONLINE
+        self.message_history = dict()
+        self.expected_id = 0
+        self.start_package = None
 
     def check_out(self):
         self.checked_out = True
-        
+    
+    def message_in_order(self, m_id, message) -> bool:
+        if m_id == self.expected_id:
+            self.message_history[m_id] = message
+            self.expected_id += 1
+            return True
+        else:
+            return False
+    
     def reset(self):
         self.checked_out = False
         self.match = None

@@ -34,6 +34,7 @@ class Server:
         self.q_matches = QuickMatchManager()
         self.r_matches = RankedMatchManager()
         self.accounts = AccountManager(Path(data_dir))
+        self._stats_directory = Path(data_dir) / 'stats'
 
         self.packets = {
             0: self.handle_start_package,
@@ -56,6 +57,23 @@ class Server:
     def assign_server(self, server):
         self.server = server
 
+    def process_message(self, buffer, client):
+        print(buffer.buff)
+        message_id = buffer.read_int()
+        if not client.message_in_order(message_id, buffer.buff):
+            self.send_message_resend_request(message_id, client)
+        buffer.reset_read_pos()
+        
+        buffer.buff = buffer.buff[4:]
+        return buffer.buff
+    
+    def send_message_resend_request(self, message_id, client):
+        buffer = ByteBuffer()
+        buffer.write_int(15)
+        buffer.write_int(message_id)
+        buffer.write_byte(b'\x1f\x1f\x1f')
+        client.connection.write(buffer.get_byte_array())
+
     async def handle_echo(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
         print("Client connected!")
         client = Client(writer, writer.get_extra_info('peername')[0], writer.get_extra_info('peername')[1])
@@ -69,8 +87,12 @@ class Server:
                 break
             buffer.write_bytes(data[:-3])
             print(f"Package received of length {len(data)}")
+            buffer.buff = self.process_message(buffer, client)
             packet_id = buffer.read_int(False)
-            self.packets[packet_id](buffer.buff, client)
+            try:
+                self.packets[packet_id](buffer.buff, client)
+            except KeyError:
+                logging.debug(f"Invalid packet id: {packet_id}")
             buffer.clear()
             # if client.match is truthy, the client must have a match
             # if the client has a match, then there must be an existing turn-timer running
@@ -95,6 +117,7 @@ class Server:
                         if client.match.drafting:
                             self.send_draft_disconnection(client.match.player2)
                             self.r_matches.end_match(client.match.get_match_id())
+                            client_db[client.username] = PlayerStatus.OFFLINE
                         else:
                             if client_db[client.match.player2.username] == PlayerStatus.DISCONNECTED:
                                 client_db[client.match.player2.username] = PlayerStatus.OFFLINE
@@ -114,6 +137,7 @@ class Server:
                         if client.match.drafting:
                             self.send_draft_disconnection(client.match.player1)
                             self.r_matches.end_match(client.match.get_match_id())
+                            client_db[client.username] = PlayerStatus.OFFLINE
                         else:
                             if client_db[client.match.player1.username] == PlayerStatus.DISCONNECTED:
                                 client_db[client.match.player1.username] = PlayerStatus.OFFLINE
@@ -125,12 +149,8 @@ class Server:
                     client_db[client.username] = PlayerStatus.OFFLINE
             else:
                 client_db.pop(client.username)
-            for match in self.q_matches.waiting_matches:
-                if match.player1 == client:
-                    self.q_matches.clear_matches()
-            for match in self.r_matches.waiting_matches:
-                if match.player1 == client:
-                    self.r_matches.clear_matches()
+            self.q_matches.end_open_match_by_player_name(client)
+            self.r_matches.end_open_match_by_player_name(client)
         writer.close()
                     
 
@@ -249,7 +269,7 @@ class Server:
         names = [buffer.read_string() for i in range(3)]
         won = buffer.read_int()
         for name in names:
-            path = f"stats/{name}.dat"
+            path = self._stats_directory / f"{name}.dat"
             if os.path.exists(path):
                 with open(path) as f:
                     lines = f.readlines()
@@ -528,4 +548,7 @@ class Server:
                 self.r_matches.end_match(client.match.get_match_id())
 
     def handle_search_cancellation(self, data: list, client: Client):
-        self.q_matches.clear_matches()
+        
+        self.q_matches.end_open_match_by_player_name(client)
+        self.r_matches.end_open_match_by_player_name(client)
+        

@@ -23,6 +23,11 @@ class RankedMatchManager():
     def clear_matches(self):
         self.waiting_matches.clear()
 
+    def end_open_match_by_player_name(self, client):
+        for match in self.waiting_matches:
+            if match.player1.username == client.username:
+                self.waiting_matches.remove(match)
+
     def end_match(self, matchID: str):
         self.matches[matchID].end()
         self.matches.pop(matchID)

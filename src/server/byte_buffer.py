@@ -18,6 +18,9 @@ class ByteBuffer():
     def count(self) -> int:
         return len(self.buff)
     
+    def reset_read_pos(self):
+        self.read_pos = 0
+    
     def length(self) -> int:
         return self.count() - self.read_pos
     

@@ -13,7 +13,12 @@ class QuickMatchManager():
     def create_open_match(self, client, start_package):
         logging.debug("Created new open quick match!")
         self.waiting_matches.append(QuickMatch(client, start_package))
-        
+    
+    def end_open_match_by_player_name(self, client):
+        for match in self.waiting_matches:
+            if match.player1.username == client.username:
+                self.waiting_matches.remove(match)
+    
     def send_player1_message(self, matchID: str, message: list[bytes]):
         self.matches[matchID].player1.connection.write(message)
 
